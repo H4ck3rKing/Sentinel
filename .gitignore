@@ -1,0 +1,13 @@
+# Binaries for built go application
+sentinel
+
+# Results and logs
+results/
+bugbounty-results/
+
+# OS-specific files
+.DS_Store
+*.log
+
+# Debian packages
+*.deb 

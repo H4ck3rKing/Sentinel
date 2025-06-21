@@ -1,0 +1,36 @@
+# Sentinel Configuration File
+# Creator: Andrew Gatsi
+# Contact: andrew.gatsi@tech49originals.com
+
+# API Keys - Add your keys here
+keys:
+  shodan: ""
+  censys_id: ""
+  censys_secret: ""
+  # Add other API keys as needed (e.g., Virustotal, GitHub)
+
+# Notification Webhooks
+notifications:
+  slack_webhook: ""
+  discord_webhook: ""
+
+# Scanner Settings
+scanner:
+  # Rate limit in requests per second (for tools that support it)
+  rate_limit: 10
+  # Scan intensity: "light", "medium", "full"
+  intensity: "medium"
+  # Proxy to route traffic through (e.g., http://127.0.0.1:8080)
+  proxy: ""
+
+# Paths to third-party tools.
+# If left blank, Sentinel will assume they are in the system's PATH.
+tools:
+  subfinder: ""
+  amass: ""
+  dnsx: ""
+  naabu: ""
+  httpx: ""
+  nuclei: ""
+  gospider: ""
+  # Add other tool paths as needed 
