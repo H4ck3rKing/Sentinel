@@ -2,64 +2,82 @@ package reconnaissance
 
 import (
 	"bufio"
+	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"bug/modules/config"
 	"bug/modules/utils"
 )
 
 // RunReconnaissance orchestrates the full reconnaissance workflow.
-func RunReconnaissance(config map[string]string) {
-	target := config["TARGET_DOMAIN"]
+func RunReconnaissance(cfg *config.Config, db *sql.DB) {
+	for _, target := range cfg.Targets {
+		runForTarget(target, cfg, db)
+	}
+}
+
+func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 	utils.Log(fmt.Sprintf("Starting reconnaissance for: %s", target))
 
-	targetResultDir := filepath.Join("bugbounty-results", target, "recon")
-	if err := os.MkdirAll(targetResultDir, 0755); err != nil {
-		utils.Error("Error creating target directory", err)
+	// Get target ID from the database
+	var targetID int64
+	err := db.QueryRow("INSERT INTO targets(name) VALUES(?) ON CONFLICT(name) DO UPDATE SET name=name RETURNING id", target).Scan(&targetID)
+	if err != nil {
+		utils.Error("Could not get target ID from database", err)
 		return
 	}
-	utils.Log(fmt.Sprintf("Results will be saved in: %s", targetResultDir))
 
-	// Step 1: Discover subdomains
-	subdomainsDir := filepath.Join(targetResultDir, "subdomains")
-	os.MkdirAll(subdomainsDir, 0755)
-	subfinderOutputFile := filepath.Join(subdomainsDir, "subfinder.txt")
-	runSubfinder(target, subfinderOutputFile)
+	// --- Subdomain Enumeration ---
+	utils.Log("Phase 1: Subdomain Enumeration for " + target)
+	subdomains, err := runSubfinder(target, cfg)
+	if err != nil {
+		utils.Error("Subfinder execution failed", err)
+		return
+	}
+	// Insert subdomains into DB
+	for _, sub := range subdomains {
+		_, err := db.Exec("INSERT OR IGNORE INTO subdomains(target_id, subdomain) VALUES(?, ?)", targetID, sub)
+		if err != nil {
+			utils.Warn(fmt.Sprintf("Failed to insert subdomain %s: %v", sub, err))
+		}
+	}
+	utils.Success(fmt.Sprintf("Found and saved %d subdomains for %s", len(subdomains), target))
 
 	// Step 2: Resolve discovered subdomains to IPs
-	dnsDir := filepath.Join(targetResultDir, "dns")
+	dnsDir := filepath.Join("bugbounty-results", cfg.Workspace, target, "dns")
 	os.MkdirAll(dnsDir, 0755)
 	resolvedOutputFile := filepath.Join(dnsDir, "resolved.txt")
-	runDnsx(subfinderOutputFile, resolvedOutputFile)
+	runDnsx(subdomains, resolvedOutputFile)
 
 	// Step 3: Scan for open ports on resolved IPs
-	portsDir := filepath.Join(targetResultDir, "ports")
+	portsDir := filepath.Join("bugbounty-results", cfg.Workspace, target, "ports")
 	os.MkdirAll(portsDir, 0755)
 	naabuOutputFile := filepath.Join(portsDir, "ports.txt")
 	runNaabu(resolvedOutputFile, naabuOutputFile)
 
 	// Step 4: Identify web servers on the open ports
-	webDir := filepath.Join(targetResultDir, "web")
+	webDir := filepath.Join("bugbounty-results", cfg.Workspace, target, "web")
 	os.MkdirAll(webDir, 0755)
 	httpxOutputFile := filepath.Join(webDir, "webservers.txt")
 	runHttpx(naabuOutputFile, httpxOutputFile)
 
 	// Step 5: Run context-aware vulnerability scans
-	runContextualNucleiScans(httpxOutputFile, targetResultDir)
+	runContextualNucleiScans(httpxOutputFile, target)
 
 	utils.Success(fmt.Sprintf("Reconnaissance complete for: %s", target))
 }
 
-func runSubfinder(target, outputFile string) {
+func runSubfinder(target string, cfg *config.Config) ([]string, error) {
 	utils.Log("Running passive subdomain enumeration with Subfinder...")
-	err := utils.RunCommand("subfinder", "-d", target, "-o", outputFile, "-silent")
+	// We run the command and capture its output, instead of writing to a file.
+	output, err := utils.RunCommandAndCapture("subfinder", "-d", target, "-silent")
 	if err != nil {
-		utils.Error("Error running subfinder", err)
+		return nil, err
 	}
+	return strings.Split(strings.TrimSpace(output), "\n"), nil
 }
 
 func runDnsx(inputFile, outputFile string) {

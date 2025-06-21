@@ -3,52 +3,53 @@ package utils
 import (
 	"fmt"
 	"log"
+	"os"
 	"time"
+
+	"github.com/fatih/color"
 )
 
-// --- Colors and Formatting ---
-const (
-	ColorRed    = "\033[0;31m"
-	ColorGreen  = "\033[0;32m"
-	ColorYellow = "\033[1;33m"
-	ColorBlue   = "\033[0;34m"
-	ColorPurple = "\033[0;35m"
-	ColorCyan   = "\033[0;36m"
-	ColorWhite  = "\033[1;37m"
-	ColorReset  = "\033[0m"
-)
+// --- Colors are now handled by the fatih/color library ---
 
 // --- Logging Functions ---
 
 // getTimestamp creates a formatted timestamp string.
 func getTimestamp() string {
-	return time.Now().Format("2006-01-02 15:04:05")
+	return time.Now().Format("15:04:05")
 }
 
 // Log prints a standard informational message.
 func Log(message string) {
-	fmt.Printf("%s[INFO][%s]%s %s\n", ColorGreen, getTimestamp(), ColorReset, message)
+	color.New(color.FgGreen).Printf("[INFO][%s] ", getTimestamp())
+	fmt.Println(message)
 }
 
 // Warn prints a warning message.
 func Warn(message string) {
-	fmt.Printf("%s[WARN][%s]%s %s\n", ColorYellow, getTimestamp(), ColorReset, message)
+	color.New(color.FgYellow).Printf("[WARN][%s] ", getTimestamp())
+	fmt.Println(message)
 }
 
 // Error prints an error message and logs it to a file.
 func Error(message string, err error) {
-	fullMessage := fmt.Sprintf("%s[ERROR][%s]%s %s: %v", ColorRed, getTimestamp(), ColorReset, message, err)
-	fmt.Println(fullMessage)
-	// Future: Add file logging here, e.g., to bugbounty-results/logs/sentinel.log
+	color.New(color.FgRed).Printf("[ERROR][%s] ", getTimestamp())
+	if err != nil {
+		fmt.Printf("%s: %v\n", message, err)
+	} else {
+		fmt.Println(message)
+	}
+	// Future: Add file logging here
 }
 
 // Success prints a success message.
 func Success(message string) {
-	fmt.Printf("%s[SUCCESS][%s]%s %s\n", ColorCyan, getTimestamp(), ColorReset, message)
+	color.New(color.FgCyan).Printf("[SUCCESS][%s] ", getTimestamp())
+	fmt.Println(message)
 }
 
 // Critical prints a critical error message and exits.
 func Critical(message string, err error) {
-	fullMessage := fmt.Sprintf("%s[CRITICAL][%s]%s %s: %v", ColorRed, getTimestamp(), ColorReset, message, err)
-	log.Fatalf(fullMessage)
+	errorMsg := fmt.Sprintf("[%s] %s: %v", getTimestamp(), message, err)
+	color.New(color.FgRed, color.Bold).Fprintln(os.Stderr, "[CRITICAL]"+errorMsg)
+	log.Fatalf("") // fatih/color handles printing, exit cleanly.
 } 
