@@ -70,7 +70,7 @@ func CreateDefaultConfig() (*Config, error) {
 		Fuzzing: struct {
 			Wordlist string `yaml:"wordlist,omitempty"`
 		}{
-			Wordlist: "wordlists/default.txt", // Consider a common path
+			Wordlist: "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt",
 		},
 		Scanning: struct {
 			Intensity string `yaml:"intensity,omitempty"` // "light", "normal", "deep"
@@ -131,4 +131,4 @@ func LoadConfig() (*Config, error) {
 	}
 
 	return &cfg, nil
-} 
+}

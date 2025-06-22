@@ -7,9 +7,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"bug/modules/config"
-	"bug/modules/database"
-	"bug/modules/utils"
+	"sentinel/modules/config"
+	"sentinel/modules/database"
+	"sentinel/modules/utils"
 	"github.com/fatih/color"
 	_ "github.com/mattn/go-sqlite3"
 )

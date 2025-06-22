@@ -5,15 +5,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
-	"bug/modules/config"
-	"bug/modules/database"
-	"bug/modules/utils"
+	"sentinel/modules/config"
+	"sentinel/modules/database"
+	"sentinel/modules/utils"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -87,40 +86,50 @@ func runForTarget(ctx context.Context, target string, cfg *config.Config, db *sq
 	utils.Success(fmt.Sprintf("Resolved IPs for %d live subdomains.", len(liveSubdomains)))
 
 	// --- Phase 3: Port Scanning ---
+	var openPorts = make(map[string][]int)
 	ips, err := getIPsForTarget(db, targetID)
-	if err != nil || len(ips) == 0 {
-		utils.Warn("No IPs found for port scanning.")
-		return
-	}
-	openPorts, err := runNaabu(ctx, ips, options)
 	if err != nil {
-		return
+		utils.Warn(fmt.Sprintf("Could not get IPs for target %d from db", targetID))
 	}
-	for host, ports := range openPorts {
-		var ipID int64
-		// This is a simplification; a real implementation would handle domain-to-IP relationships better.
-		err := db.QueryRow("SELECT id FROM ips WHERE ip_address = ?", host).Scan(&ipID)
+
+	if len(ips) > 0 {
+		openPorts, err = runNaabu(ctx, ips, options)
 		if err != nil {
-			continue
+			return // Naabu error is critical enough to stop
 		}
-		for _, port := range ports {
-			_, err := db.Exec("INSERT OR IGNORE INTO ports(ip_id, port) VALUES(?, ?)", ipID, port)
+		for host, ports := range openPorts {
+			var ipID int64
+			err := db.QueryRow("SELECT id FROM ips WHERE ip_address = ?", host).Scan(&ipID)
 			if err != nil {
-				utils.Warn(fmt.Sprintf("Failed to insert port %d for %s: %v", port, host, err))
+				continue
+			}
+			for _, port := range ports {
+				_, err := db.Exec("INSERT OR IGNORE INTO ports(ip_id, port) VALUES(?, ?)", ipID, port)
+				if err != nil {
+					utils.Warn(fmt.Sprintf("Failed to insert port %d for %s: %v", port, host, err))
+				}
 			}
 		}
+		utils.Success(fmt.Sprintf("Found open ports for %d hosts.", len(openPorts)))
+	} else {
+		utils.Warn("No IPs found for port scanning. Proceeding with web discovery on subdomains.")
 	}
-	utils.Success(fmt.Sprintf("Found open ports for %d hosts.", len(openPorts)))
 
 	// --- Phase 4: Web Server Discovery ---
-	// First, get URLs from passive discovery
+	// Get all subdomains for the target to scan them with httpx
+	allSubdomains, err := getSubdomainsForTarget(db, targetID)
+	if err != nil {
+		utils.Warn("Could not get subdomains from database for httpx.")
+		allSubdomains = []string{} // ensure it's not nil
+	}
+	// Also get URLs from passive discovery
 	urls, err := getURLsForTarget(db, targetID)
 	if err != nil {
 		utils.Warn("Could not get URLs from database for httpx.")
 		urls = []string{}
 	}
 
-	liveURLs, err := runHttpx(ctx, openPorts, urls, options, db)
+	liveURLs, err := runHttpx(ctx, openPorts, allSubdomains, urls, options, db, targetID)
 	if err != nil {
 		return
 	}
@@ -288,9 +297,10 @@ type HttpxResult struct {
 	Tech       []string `json:"tech"`
 }
 
-func runHttpx(ctx context.Context, ports map[string][]int, passiveURLs []string, options utils.Options, db *sql.DB) ([]HttpxResult, error) {
+func runHttpx(ctx context.Context, ports map[string][]int, subdomains []string, passiveURLs []string, options utils.Options, db *sql.DB, targetID int64) ([]HttpxResult, error) {
 	utils.Banner("Running Web Server Discovery (httpx)")
 	targets := passiveURLs
+	targets = append(targets, subdomains...)
 	for host, portList := range ports {
 		for _, port := range portList {
 			targets = append(targets, fmt.Sprintf("%s:%d", host, port))
@@ -328,55 +338,48 @@ func runHttpx(ctx context.Context, ports map[string][]int, passiveURLs []string,
 			continue // Ignore lines that aren't valid JSON
 		}
 
-		// Parse the input to get the original IP and Port
-		host, portStr, err := net.SplitHostPort(res.Input)
-		if err != nil {
-			utils.Warn(fmt.Sprintf("Could not parse httpx input %s: %v", res.Input, err))
-			continue
-		}
-		port, _ := strconv.Atoi(portStr)
+		// Combine technologies into a single string
+		techStr := strings.Join(res.Tech, ", ")
 
-		// Find the corresponding port_id in the database
-		var portID int64
-		// We need to find the ip_id first
-		var ipID int64
-		err = db.QueryRow("SELECT id FROM ips WHERE ip_address = ?", host).Scan(&ipID)
-		if err != nil {
-			// This can happen if the host is a domain, not an IP. For now, we'll log and skip.
-			utils.Warn(fmt.Sprintf("Could not find ip_id for host %s from httpx input. URL: %s. Error: %v", host, res.URL, err))
-			continue
-		}
-
-		// Now find the port_id
-		err = db.QueryRow("SELECT id FROM ports WHERE ip_id = ? AND port = ?", ipID, port).Scan(&portID)
-		if err != nil {
-			utils.Warn(fmt.Sprintf("Could not find port_id for IP %s and port %d: %v", host, port, err))
-			continue
-		}
-
-		// Insert the URL into the database
-		result, err := db.Exec("INSERT OR IGNORE INTO urls(port_id, url, status_code, title) VALUES(?, ?, ?, ?)",
-			portID, res.URL, res.StatusCode, res.Title)
+		// Insert or Update the URL in the database
+		// We use INSERT OR IGNORE and then UPDATE to handle both new and existing (from gau) URLs.
+		_, err := db.Exec("INSERT OR IGNORE INTO urls(target_id, url, source) VALUES(?, ?, ?)",
+			targetID, res.URL, "httpx")
 		if err != nil {
 			utils.Warn(fmt.Sprintf("Failed to insert URL %s: %v", res.URL, err))
 			continue
 		}
 
-		urlID, err := result.LastInsertId()
+		// Now update the details for the URL.
+		_, err = db.Exec("UPDATE urls SET status_code = ?, title = ?, tech = ? WHERE url = ?",
+			res.StatusCode, res.Title, techStr, res.URL)
 		if err != nil {
-			utils.Warn(fmt.Sprintf("Failed to get last insert ID for URL %s: %v", res.URL, err))
+			utils.Warn(fmt.Sprintf("Failed to update details for URL %s: %v", res.URL, err))
 			continue
-		}
-
-		// Insert technologies
-		for _, tech := range res.Tech {
-			_, err := db.Exec("INSERT OR IGNORE INTO technologies(url_id, technology) VALUES(?, ?)", urlID, tech)
-			if err != nil {
-				utils.Warn(fmt.Sprintf("Failed to insert technology %s for URL %s: %v", tech, res.URL, err))
-			}
 		}
 
 		results = append(results, res)
 	}
 	return results, nil
-} 
+}
+
+func getSubdomainsForTarget(db *sql.DB, targetID int64) ([]string, error) {
+	rows, err := db.Query(`
+		SELECT s.subdomain
+		FROM subdomains s
+		WHERE s.target_id = ?`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var subdomains []string
+	for rows.Next() {
+		var sub string
+		if err := rows.Scan(&sub); err != nil {
+			return nil, err
+		}
+		subdomains = append(subdomains, sub)
+	}
+	return subdomains, nil
+}

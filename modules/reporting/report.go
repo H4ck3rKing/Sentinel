@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"bug/modules/config"
-	"bug/modules/utils"
+	"sentinel/modules/config"
+	"sentinel/modules/utils"
 )
 
 // ReportData holds all the structured information for a report.
@@ -74,24 +74,66 @@ func gatherData(db *sql.DB, workspace string) (*ReportData, error) {
 		SeverityCounts: make(map[string]int),
 	}
 
-	// This is a simplified query. A real-world scenario might need more complex JOINs
-	// to trace back to the root target domain.
 	rows, err := db.Query(`
-		SELECT v.name, v.severity, v.description, u.url, e.title, e.edb_id, e.path
+		SELECT t.target, v.name, v.severity, v.description, u.url, e.title, e.edb_id, e.path
 		FROM vulnerabilities v
 		JOIN urls u ON v.url_id = u.id
-		LEFT JOIN exploits e ON e.vulnerability_id = v.id
-		ORDER BY u.url, v.severity
+		JOIN targets t ON u.target_id = t.id
+		LEFT JOIN exploits e ON v.id = e.vulnerability_id
+		ORDER BY t.target, v.severity, v.name
 	`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query report data: %w", err)
 	}
 	defer rows.Close()
 
-	// In a real app, you would process these rows into the ReportData struct.
-	// This is a complex data transformation task.
-	// For now, we are acknowledging the data is available to be processed.
-	data.TotalVulns = 0 // This would be calculated from the rows.
+	vulnMap := make(map[string]map[string]*VulnInfo)
+	targetMap := make(map[string]bool)
+
+	for rows.Next() {
+		var targetName, vulnName, severity, description, url, exploitTitle, edbID, exploitPath sql.NullString
+		if err := rows.Scan(&targetName, &vulnName, &severity, &description, &url, &exploitTitle, &edbID, &exploitPath); err != nil {
+			return nil, fmt.Errorf("failed to scan report row: %w", err)
+		}
+
+		if !targetName.Valid || !vulnName.Valid {
+			continue
+		}
+		targetMap[targetName.String] = true
+
+		if _, ok := vulnMap[targetName.String]; !ok {
+			vulnMap[targetName.String] = make(map[string]*VulnInfo)
+		}
+
+		vulnKey := fmt.Sprintf("%s|%s", url.String, vulnName.String)
+		if _, ok := vulnMap[targetName.String][vulnKey]; !ok {
+			vulnMap[targetName.String][vulnKey] = &VulnInfo{
+				Name:        vulnName.String,
+				Severity:    severity.String,
+				Description: description.String,
+				URL:         url.String,
+				Exploits:    []ExploitInfo{},
+			}
+			data.TotalVulns++
+			data.SeverityCounts[severity.String]++
+		}
+
+		if exploitTitle.Valid {
+			vulnMap[targetName.String][vulnKey].Exploits = append(vulnMap[targetName.String][vulnKey].Exploits, ExploitInfo{
+				Title:  exploitTitle.String,
+				EDB_ID: edbID.String,
+				Path:   exploitPath.String,
+			})
+		}
+	}
+
+	for targetName, vulns := range vulnMap {
+		target := TargetData{Name: targetName}
+		for _, v := range vulns {
+			target.Vulnerabilities = append(target.Vulnerabilities, *v)
+		}
+		data.Targets = append(data.Targets, target)
+	}
 
 	return data, nil
 }
@@ -102,18 +144,41 @@ func buildMarkdown(data *ReportData) string {
 	sb.WriteString(fmt.Sprintf("# Sentinel Engagement Report: %s\n\n", data.Workspace))
 	sb.WriteString(fmt.Sprintf("**Report Generated:** %s\n\n", data.Timestamp))
 	sb.WriteString("## Executive Summary\n\n")
-	sb.WriteString("This report details the findings from an automated security assessment conducted by the Sentinel framework.\n\n")
-	sb.WriteString(fmt.Sprintf("A total of **%d vulnerabilities** were identified across all targets.\n\n", data.TotalVulns))
+	sb.WriteString("This report details the findings from an automated security assessment conducted by the Sentinel framework. The following is a summary of vulnerabilities discovered across all targets.\n\n")
 
-	// ... More detailed sections would be built here ...
+	// Severity Table
+	sb.WriteString("| Severity | Count |\n")
+	sb.WriteString("|----------|-------|\n")
+	severities := []string{"critical", "high", "medium", "low", "info"}
+	for _, sev := range severities {
+		if count, ok := data.SeverityCounts[sev]; ok {
+			sb.WriteString(fmt.Sprintf("| %s | %d |\n", strings.Title(sev), count))
+		}
+	}
+	sb.WriteString(fmt.Sprintf("\nA total of **%d vulnerabilities** were identified.\n\n", data.TotalVulns))
 
 	sb.WriteString("## Detailed Findings\n\n")
 	if len(data.Targets) == 0 {
-		sb.WriteString("No vulnerabilities found for any target.\n")
+		sb.WriteString("No vulnerabilities to report.\n")
 	} else {
 		for _, target := range data.Targets {
-			sb.WriteString(fmt.Sprintf("### Target: %s\n\n", target.Name))
-			// ... Loop through vulnerabilities and exploits ...
+			sb.WriteString(fmt.Sprintf("### Target: `%s`\n\n", target.Name))
+			for _, vuln := range target.Vulnerabilities {
+				sb.WriteString(fmt.Sprintf("#### %s\n\n", vuln.Name))
+				sb.WriteString(fmt.Sprintf("- **Severity:** %s\n", strings.Title(vuln.Severity)))
+				sb.WriteString(fmt.Sprintf("- **URL:** `%s`\n", vuln.URL))
+				sb.WriteString(fmt.Sprintf("- **Description:** %s\n", vuln.Description))
+
+				if len(vuln.Exploits) > 0 {
+					sb.WriteString("- **Potential Exploits:**\n")
+					for _, exploit := range vuln.Exploits {
+						sb.WriteString(fmt.Sprintf("  - **Title:** %s\n", exploit.Title))
+						sb.WriteString(fmt.Sprintf("    - **EDB-ID:** %s\n", exploit.EDB_ID))
+						sb.WriteString(fmt.Sprintf("    - **Path:** `%s`\n", exploit.Path))
+					}
+				}
+				sb.WriteString("\n---\n\n")
+			}
 		}
 	}
 

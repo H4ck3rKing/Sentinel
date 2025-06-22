@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"strings"
 
-	"bug/modules/config"
-	"bug/modules/database"
-	"bug/modules/utils"
+	"sentinel/modules/config"
+	"sentinel/modules/database"
+	"sentinel/modules/utils"
 	"github.com/fatih/color"
 )
 

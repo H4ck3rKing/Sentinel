@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bug/modules/config"
-	"bug/modules/database"
-	"bug/modules/utils"
+	"sentinel/modules/config"
+	"sentinel/modules/database"
+	"sentinel/modules/utils"
 )
 
 // NucleiResult defines the structure for a single line of Nuclei's JSON output.

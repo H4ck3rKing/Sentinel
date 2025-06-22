@@ -73,6 +73,3 @@ func RunCommandAndCapture(ctx context.Context, options Options, name string, arg
 	}
 	return out.String(), nil
 }
-
-// RunCommandAndCaptureWithInput is not used by the new modules, so it can be removed
-// for now to simplify the utils package. If needed later, it can be re-added. 

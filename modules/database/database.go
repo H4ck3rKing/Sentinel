@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bug/modules/config"
+	"sentinel/modules/config"
 	_ "github.com/mattn/go-sqlite3"
 )
 
@@ -340,7 +340,7 @@ func GetJavaScriptURLs(db *sql.DB) (map[int]string, error) {
 
 // GetTargetStrings retrieves all target domains as a slice of strings.
 func GetTargetStrings(db *sql.DB) ([]string, error) {
-	rows, err := db.Query("SELECT DISTINCT domain FROM targets")
+	rows, err := db.Query("SELECT DISTINCT target FROM targets")
 	if err != nil {
 		return nil, fmt.Errorf("could not query targets: %w", err)
 	}
@@ -348,11 +348,11 @@ func GetTargetStrings(db *sql.DB) ([]string, error) {
 
 	var targets []string
 	for rows.Next() {
-		var domain string
-		if err := rows.Scan(&domain); err != nil {
+		var target string
+		if err := rows.Scan(&target); err != nil {
 			return nil, fmt.Errorf("could not scan target row: %w", err)
 		}
-		targets = append(targets, domain)
+		targets = append(targets, target)
 	}
 	return targets, nil
 }
