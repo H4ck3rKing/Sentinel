@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"io/ioutil"
@@ -42,7 +43,7 @@ type TruffleHogOutput struct {
 	StructuredData any    `json:"structured_data"`
 }
 
-func RunSecrets(config *config.Config, db *sql.DB) {
+func RunSecrets(ctx context.Context, config *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  config.Workspace,
 		Threads: config.Recon.Threads,
@@ -98,7 +99,7 @@ func RunSecrets(config *config.Config, db *sql.DB) {
 
 		// We use RunCommandAndCapture since trufflehog might print a lot of stuff to stderr
 		// that we don't want to pollute the main UI with. The output is what matters.
-		output, err := utils.RunCommandAndCapture(options, "trufflehog", "filesystem", tmpFile.Name(), "--json")
+		output, err := utils.RunCommandAndCapture(ctx, options, "trufflehog", "filesystem", tmpFile.Name(), "--json")
 		if err != nil {
 			// trufflehog exits with non-zero if it finds secrets, so we can't rely on the exit code
 			// but we should still log if there's a different kind of error.

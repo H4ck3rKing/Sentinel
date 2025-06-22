@@ -1,25 +1,25 @@
 #!/bin/sh
 set -e
 
-# Create a directory to hold our scripts
-mkdir -p /usr/share/sentinel
+# The install script is now located in the same directory as the sentinel binary
+INSTALL_SCRIPT="/usr/local/bin/install_tools.sh"
 
-# Copy the install script to the new directory
-cp /usr/local/bin/install_tools.sh /usr/share/sentinel/install_tools.sh
-chmod +x /usr/share/sentinel/install_tools.sh
+chmod +x "$INSTALL_SCRIPT"
 
-# If the install is being run by a user with sudo, SUDO_USER will be set
+# If the install is being run by a user with sudo, SUDO_USER will be set.
+# We must run the dependency installer as the regular user, not as root.
 if [ -n "$SUDO_USER" ]; then
     echo "Running dependency installation for user: $SUDO_USER"
-    su - "$SUDO_USER" -c "/usr/share/sentinel/install_tools.sh"
+    su - "$SUDO_USER" -c "$INSTALL_SCRIPT"
 else
-    # Fallback for direct root installations, though less common for user tools
-    echo "Running dependency installation for root user."
-    /usr/share/sentinel/install_tools.sh
+    # Fallback for direct root installations, though less common for user tools.
+    # This might fail for tools like pipx which should not be run as root.
+    echo "WARNING: Running dependency installation as root. This is not recommended."
+    "$INSTALL_SCRIPT"
 fi
 
-echo "Sentinel installation complete."
-echo "Please make sure your Go bin path is in your shell's PATH variable."
-echo "Example: export PATH=\$PATH:\$(go env GOPATH)/bin"
+echo "Sentinel post-installation complete."
+echo "Please make sure your Go and pipx bin paths are in your shell's PATH."
+echo "Example: export PATH=\$PATH:\$HOME/.local/bin:\$(go env GOPATH)/bin"
 
 exit 0 

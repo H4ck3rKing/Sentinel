@@ -2,8 +2,9 @@
 Version=1.0
 Name=Sentinel
 Comment=Advanced Bug Bounty Automation Framework
-Exec=gnome-terminal -e "sentinel"
-Icon=/usr/share/pixmaps/sentinel.png
+Exec=gnome-terminal -- /bin/sh -c "sentinel; exec bash"
+Icon=sentinel
 Terminal=false
 Type=Application
-Categories=Development;Security; 
+Categories=Development;Security;
+Name[en_US]=Sentinel 

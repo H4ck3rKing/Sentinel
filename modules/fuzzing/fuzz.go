@@ -1,6 +1,7 @@
 package fuzzing
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -39,7 +40,7 @@ func getBaseURLs(urls map[string]int) []string {
 	return keys
 }
 
-func RunFuzzing(config *config.Config, db *sql.DB) {
+func RunFuzzing(ctx context.Context, config *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  config.Workspace,
 		Threads: config.Recon.Threads, // ffuf uses its own thread control
@@ -53,15 +54,22 @@ func RunFuzzing(config *config.Config, db *sql.DB) {
 	}
 
 	wordlist := config.Fuzzing.Wordlist
+	// If the user hasn't specified a custom wordlist in config.yaml,
+	// use the default wordlist that is packaged with the application.
 	if wordlist == "" {
-		wordlist = "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt"
-		utils.Warn(fmt.Sprintf("No fuzzing wordlist specified in config, using default: %s", wordlist))
+		wordlist = "/usr/share/sentinel/wordlists/default.txt"
 	}
 
 	if _, err := os.Stat(wordlist); os.IsNotExist(err) {
-		utils.Error(fmt.Sprintf("Fuzzing wordlist not found at: %s", wordlist), err)
-		utils.Warn("Please install a common wordlist package (e.g., `sudo apt install seclists`) or specify a valid path in config.yaml.")
-		return
+		// As a last resort, check the local path for development environments.
+		localWordlist := "wordlists/default.txt"
+		if _, err := os.Stat(localWordlist); err == nil {
+			wordlist = localWordlist
+		} else {
+			utils.Error(fmt.Sprintf("Fuzzing wordlist not found at default location: %s", wordlist), err)
+			utils.Warn("Please ensure Sentinel is installed correctly or specify a valid wordlist path in config.yaml.")
+			return
+		}
 	}
 
 	utils.Banner("Fetching live URLs to determine base targets for fuzzing")
@@ -87,7 +95,7 @@ func RunFuzzing(config *config.Config, db *sql.DB) {
 	newURLsFound := 0
 	for _, baseURL := range baseURLs {
 		utils.Log(fmt.Sprintf("Fuzzing: %s", baseURL))
-		output, err := utils.RunCommandAndCapture(options, "ffuf", "-w", wordlist, "-u", baseURL+"/FUZZ", "-ac", "-o", "/dev/stdout", "-of", "json")
+		output, err := utils.RunCommandAndCapture(ctx, options, "ffuf", "-w", wordlist, "-u", baseURL+"/FUZZ", "-ac", "-o", "/dev/stdout", "-of", "json")
 		if err != nil && len(output) == 0 {
 			utils.Warn(fmt.Sprintf("Error running ffuf on %s: %v", baseURL, err))
 			continue

@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -29,10 +30,10 @@ func Banner(text string) {
 }
 
 // RunCommand executes an external command and prints its output.
-// It is a simplified version for better UI control.
-func RunCommand(options Options, name string, args ...string) error {
+// It accepts a context to allow for cancellation.
+func RunCommand(ctx context.Context, options Options, name string, args ...string) error {
 	fmt.Println(color.GreenString("▶ Running: %s %s", name, strings.Join(args, " ")))
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
 	if options.Env != nil {
 		cmd.Env = os.Environ()
 		for k, v := range options.Env {
@@ -48,9 +49,10 @@ func RunCommand(options Options, name string, args ...string) error {
 }
 
 // RunCommandAndCapture executes a command and returns its output.
-func RunCommandAndCapture(options Options, name string, args ...string) (string, error) {
+// It accepts a context to allow for cancellation.
+func RunCommandAndCapture(ctx context.Context, options Options, name string, args ...string) (string, error) {
 	fmt.Println(color.GreenString("▶ Capturing: %s %s", name, strings.Join(args, " ")))
-	cmd := exec.Command(name, args...)
+	cmd := exec.CommandContext(ctx, name, args...)
 	if options.Env != nil {
 		cmd.Env = os.Environ()
 		for k, v := range options.Env {

@@ -1,5 +1,5 @@
 Package: sentinel
-Version: 2.1.0
+Version: 2.3.0
 Section: utils
 Priority: optional
 Architecture: amd64

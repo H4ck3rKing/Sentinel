@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -98,6 +101,19 @@ func executor(in string) {
 	command := parts[0]
 	args := parts[1:]
 
+	// Create a context that can be cancelled.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Set up a channel to listen for interrupt signals (Ctrl+C).
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		fmt.Println(color.YellowString("\n[!] Cancellation signal received. Shutting down gracefully..."))
+		cancel()
+	}()
+
 	switch command {
 	case "exit":
 		color.Yellow("Exiting Sentinel. Goodbye!")
@@ -121,31 +137,43 @@ func executor(in string) {
 		module := args[0]
 		switch module {
 		case "recon":
-			reconnaissance.RunReconnaissance(appConfig, db)
+			reconnaissance.RunReconnaissance(ctx, appConfig, db)
 		case "crawl":
-			crawling.RunCrawl(appConfig, db)
+			crawling.RunCrawl(ctx, appConfig, db)
 		case "secrets":
-			secrets.RunSecrets(appConfig, db)
+			secrets.RunSecrets(ctx, appConfig, db)
 		case "params":
-			params.RunParams(appConfig, db)
+			params.RunParams(ctx, appConfig, db)
 		case "fuzz":
-			fuzzing.RunFuzzing(appConfig, db)
+			fuzzing.RunFuzzing(ctx, appConfig, db)
 		case "scan":
-			scanning.RunScan(appConfig, db)
+			scanning.RunScan(ctx, appConfig, db)
 		case "visual":
-			visual.RunVisual(appConfig, db)
+			visual.RunVisual(ctx, appConfig, db)
 		case "exploit":
-			exploit.RunExploitResearch(appConfig, db)
+			exploit.RunExploitResearch(ctx, appConfig, db)
 		case "report":
 			reporting.GenerateReport(appConfig, db)
 		case "all":
-			reconnaissance.RunReconnaissance(appConfig, db)
-			crawling.RunCrawl(appConfig, db)
-			secrets.RunSecrets(appConfig, db)
-			params.RunParams(appConfig, db)
-			fuzzing.RunFuzzing(appConfig, db)
-			scanning.RunScan(appConfig, db)
-			exploit.RunExploitResearch(appConfig, db)
+			// Fix: Get targets from DB for 'run all'
+			targets, err := database.GetTargetStrings(db)
+			if err != nil {
+				color.Red("Could not get targets from database for 'run all': %v", err)
+				return
+			}
+			if len(targets) == 0 {
+				color.Yellow("No targets in scope. Use 'add target <domain>' to add one.")
+				return
+			}
+			appConfig.Targets = targets // Ensure the config state is aligned with DB for this run.
+
+			reconnaissance.RunReconnaissance(ctx, appConfig, db)
+			crawling.RunCrawl(ctx, appConfig, db)
+			secrets.RunSecrets(ctx, appConfig, db)
+			params.RunParams(ctx, appConfig, db)
+			fuzzing.RunFuzzing(ctx, appConfig, db)
+			scanning.RunScan(ctx, appConfig, db)
+			exploit.RunExploitResearch(ctx, appConfig, db)
 			reporting.GenerateReport(appConfig, db)
 		default:
 			color.Red("Unknown module: %s", module)
@@ -267,6 +295,31 @@ func showOptions() {
 	fmt.Println(cyan("-------------------------------------------\n"))
 }
 
+func checkGoPath() {
+	goPath := os.Getenv("GOPATH")
+	if goPath == "" {
+		// If GOPATH is not set, try getting it from `go env`
+		out, err := exec.Command("go", "env", "GOPATH").Output()
+		if err == nil {
+			goPath = strings.TrimSpace(string(out))
+		}
+	}
+
+	if goPath == "" {
+		utils.Warn("Could not determine GOPATH. Please ensure Go is installed correctly.")
+		return
+	}
+
+	goBin := filepath.Join(goPath, "bin")
+	pathEnv := os.Getenv("PATH")
+
+	if !strings.Contains(pathEnv, goBin) {
+		utils.Warn(fmt.Sprintf("Your Go binary path (%s) is not in your system's PATH.", goBin))
+		utils.Warn(fmt.Sprintf("Please add it to your shell's config file (e.g., ~/.zshrc, ~/.bashrc):"))
+		color.Yellow("  export PATH=$PATH:%s", goBin)
+	}
+}
+
 func changeLivePrefix() (string, bool) {
 	if appConfig != nil && appConfig.Workspace != "" {
 		prompt := fmt.Sprintf("[sentinel|%s]> ", appConfig.Workspace)
@@ -306,6 +359,7 @@ func checkDependencies() {
 
 func main() {
 	checkDependencies()
+	checkGoPath()
 
 	var err error
 	appConfig, err = config.LoadConfig()

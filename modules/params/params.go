@@ -1,6 +1,7 @@
 package params
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,7 +18,7 @@ type ArjunOutput struct {
 	Parameters map[string][]string `json:"parameters"`
 }
 
-func RunParams(config *config.Config, db *sql.DB) {
+func RunParams(ctx context.Context, config *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  config.Workspace,
 		Threads: config.Recon.Threads,
@@ -47,7 +48,7 @@ func RunParams(config *config.Config, db *sql.DB) {
 	for urlStr, urlID := range urls {
 		utils.Log(fmt.Sprintf("Scanning: %s", urlStr))
 
-		output, err := utils.RunCommandAndCapture(options, "arjun", "-u", urlStr, "-oJ", "/dev/stdout", "--stable")
+		output, err := utils.RunCommandAndCapture(ctx, options, "arjun", "-u", urlStr, "-oJ", "/dev/stdout", "--stable")
 		if err != nil {
 			if len(output) == 0 {
 				utils.Warn(fmt.Sprintf("Error running arjun on %s: %v", urlStr, err))

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 # This script installs the Go tools required by the Sentinel framework.
 # Make sure you have Go installed and your GOPATH is set up correctly.
@@ -50,4 +51,25 @@ echo
 echo "[*] Tool installation complete."
 echo "[*] Please ensure that your \$GOPATH/bin directory is in your system's PATH environment variable."
 echo "[*] You might need to add this to your shell profile (e.g., ~/.zshrc, ~/.bashrc)."
-echo "[*] You can add it by running: export PATH=\$PATH:\$(go env GOPATH)/bin" 
+echo "[*] You can add it by running: export PATH=\$PATH:\$(go env GOPATH)/bin"
+
+# Final check to ensure all tools are installed
+echo "[*] Verifying installation..."
+TOOLS="subfinder dnsx naabu httpx katana gau ffuf gowitness trufflehog arjun"
+FAILED_TOOLS=""
+for tool in $TOOLS; do
+    if ! command -v $tool > /dev/null; then
+        echo "  [!] FAILED to install $tool"
+        FAILED_TOOLS="$FAILED_TOOLS $tool"
+    else
+        echo "  [✔] $tool is installed."
+    fi
+done
+
+if [ -n "$FAILED_TOOLS" ]; then
+    echo "\n[ERROR] Some tools could not be installed:$FAILED_TOOLS"
+    echo "Please try running the script again, or install them manually."
+    exit 1
+else
+    echo "\n[SUCCESS] All tools have been successfully installed."
+fi 

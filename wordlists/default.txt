@@ -1,0 +1,17 @@
+/
+/api/
+/admin/
+/login/
+/dashboard/
+/config/
+/uploads/
+/static/
+/assets/
+/js/
+/css/
+index.html
+index.php
+robots.txt
+sitemap.xml
+.git/config
+.env 

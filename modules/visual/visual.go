@@ -1,6 +1,7 @@
 package visual
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -13,7 +14,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-func RunVisual(config *config.Config, db *sql.DB) {
+func RunVisual(ctx context.Context, config *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  config.Workspace,
 		Threads: config.Recon.Threads,
@@ -58,7 +59,7 @@ func RunVisual(config *config.Config, db *sql.DB) {
 
 	utils.Banner("Running gowitness... this may take a while")
 	// gowitness command to use our temp file and output to our designated screenshot directory
-	utils.RunCommand(options, "gowitness", "file", "-f", tempInputFile.Name(), "-d", screenshotDir, "--db-path", gowitnessDBPath)
+	utils.RunCommand(ctx, options, "gowitness", "file", "-f", tempInputFile.Name(), "-d", screenshotDir, "--db-path", gowitnessDBPath)
 
 	utils.Banner("Updating database with screenshot paths")
 	// Now, read the gowitness database to get the paths

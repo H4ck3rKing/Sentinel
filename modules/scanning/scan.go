@@ -1,6 +1,7 @@
 package scanning
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -26,7 +27,7 @@ type NucleiResult struct {
 }
 
 // RunScan orchestrates the vulnerability scanning workflow.
-func RunScan(cfg *config.Config, db *sql.DB) {
+func RunScan(ctx context.Context, cfg *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  cfg.Workspace,
 		Threads: cfg.Recon.Threads, // Nuclei uses its own concurrency settings
@@ -45,7 +46,7 @@ func RunScan(cfg *config.Config, db *sql.DB) {
 	}
 
 	// 2. Run Nuclei on the discovered URLs
-	results, err := runNuclei(urls, options, cfg)
+	results, err := runNuclei(ctx, urls, options, cfg)
 	if err != nil {
 		utils.Error("Error running Nuclei scan", err)
 		return
@@ -73,7 +74,7 @@ func RunScan(cfg *config.Config, db *sql.DB) {
 	utils.Success(fmt.Sprintf("Vulnerability scan complete. Found and saved %d potential vulnerabilities.", savedCount))
 }
 
-func runNuclei(urls []string, options utils.Options, cfg *config.Config) ([]NucleiResult, error) {
+func runNuclei(ctx context.Context, urls []string, options utils.Options, cfg *config.Config) ([]NucleiResult, error) {
 	utils.Banner(fmt.Sprintf("Running Nuclei on %d URLs...", len(urls)))
 
 	tempDir := filepath.Join(options.Output, "temp")
@@ -101,7 +102,7 @@ func runNuclei(urls []string, options utils.Options, cfg *config.Config) ([]Nucl
 		args = append(args, "-severity", "medium,high,critical")
 	}
 
-	output, err := utils.RunCommandAndCapture(options, "nuclei", args...)
+	output, err := utils.RunCommandAndCapture(ctx, options, "nuclei", args...)
 	if err != nil {
 		return nil, err
 	}

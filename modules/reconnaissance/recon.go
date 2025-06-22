@@ -1,6 +1,7 @@
 package reconnaissance
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,13 +18,13 @@ import (
 )
 
 // RunReconnaissance orchestrates the full reconnaissance workflow.
-func RunReconnaissance(cfg *config.Config, db *sql.DB) {
+func RunReconnaissance(ctx context.Context, cfg *config.Config, db *sql.DB) {
 	for _, target := range cfg.Targets {
-		runForTarget(target, cfg, db)
+		runForTarget(ctx, target, cfg, db)
 	}
 }
 
-func runForTarget(target string, cfg *config.Config, db *sql.DB) {
+func runForTarget(ctx context.Context, target string, cfg *config.Config, db *sql.DB) {
 	utils.Banner(fmt.Sprintf("Starting reconnaissance for target: %s", target))
 
 	options := utils.Options{
@@ -38,7 +39,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 	}
 
 	// --- Phase 1: Subdomain Enumeration ---
-	subdomains, err := runSubfinder(target, options, cfg)
+	subdomains, err := runSubfinder(ctx, target, options, cfg)
 	if err != nil {
 		return // Error already logged
 	}
@@ -51,7 +52,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 	utils.Success(fmt.Sprintf("Found %d subdomains.", len(subdomains)))
 
 	// --- Phase 1.5: Passive URL Discovery ---
-	gauURLs, err := runGau(target, options)
+	gauURLs, err := runGau(ctx, target, options)
 	if err != nil {
 		// This is a soft error, passive discovery might fail
 		utils.Warn(fmt.Sprintf("gau passive discovery failed: %v", err))
@@ -66,7 +67,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 	}
 
 	// --- Phase 2: DNS Resolution ---
-	liveSubdomains, err := runDnsx(subdomains, options)
+	liveSubdomains, err := runDnsx(ctx, subdomains, options)
 	if err != nil {
 		return
 	}
@@ -91,7 +92,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 		utils.Warn("No IPs found for port scanning.")
 		return
 	}
-	openPorts, err := runNaabu(ips, options)
+	openPorts, err := runNaabu(ctx, ips, options)
 	if err != nil {
 		return
 	}
@@ -119,7 +120,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 		urls = []string{}
 	}
 
-	liveURLs, err := runHttpx(openPorts, urls, options, db)
+	liveURLs, err := runHttpx(ctx, openPorts, urls, options, db)
 	if err != nil {
 		return
 	}
@@ -128,7 +129,7 @@ func runForTarget(target string, cfg *config.Config, db *sql.DB) {
 	utils.Banner(fmt.Sprintf("Reconnaissance complete for: %s", target))
 }
 
-func runSubfinder(target string, options utils.Options, cfg *config.Config) ([]string, error) {
+func runSubfinder(ctx context.Context, target string, options utils.Options, cfg *config.Config) ([]string, error) {
 	utils.Banner("Running Subdomain Enumeration (subfinder)")
 
 	// Use API keys if available
@@ -140,16 +141,16 @@ func runSubfinder(target string, options utils.Options, cfg *config.Config) ([]s
 		utils.Success("Using GitHub API key for subfinder.")
 	}
 
-	output, err := utils.RunCommandAndCapture(options, "subfinder", "-d", target, "-silent")
+	output, err := utils.RunCommandAndCapture(ctx, options, "subfinder", "-d", target, "-silent")
 	if err != nil {
 		return nil, err
 	}
 	return strings.Split(strings.TrimSpace(output), "\n"), nil
 }
 
-func runGau(target string, options utils.Options) ([]string, error) {
+func runGau(ctx context.Context, target string, options utils.Options) ([]string, error) {
 	utils.Banner("Running Passive URL Discovery (gau)")
-	output, err := utils.RunCommandAndCapture(options, "gau", target)
+	output, err := utils.RunCommandAndCapture(ctx, options, "gau", target)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +162,7 @@ type DnsxResult struct {
 	IPs  []string `json:"ip"`
 }
 
-func runDnsx(subdomains []string, options utils.Options) (map[string][]string, error) {
+func runDnsx(ctx context.Context, subdomains []string, options utils.Options) (map[string][]string, error) {
 	utils.Banner("Running DNS Resolution (dnsx)")
 	tempDir := filepath.Join(options.Output, "temp")
 	os.MkdirAll(tempDir, 0755)
@@ -172,9 +173,18 @@ func runDnsx(subdomains []string, options utils.Options) (map[string][]string, e
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(options, "dnsx", "-l", tempInputFile, "-silent", "-json")
+	output, err := utils.RunCommandAndCapture(ctx, options, "dnsx", "-l", tempInputFile, "-silent", "-json")
 	if err != nil {
-		return nil, err
+		// dnsx can return an error if it fails to resolve anything, which isn't a fatal error for the whole program.
+		// We log it and return an empty map to allow the recon flow to continue.
+		utils.Warn(fmt.Sprintf("dnsx command failed. This may happen if no domains could be resolved. Error: %v", err))
+		return make(map[string][]string), nil
+	}
+
+	// If the output is empty, it means no domains were resolved.
+	if strings.TrimSpace(output) == "" {
+		utils.Log("dnsx returned no output, meaning no subdomains could be resolved.")
+		return make(map[string][]string), nil
 	}
 
 	results := make(map[string][]string)
@@ -239,7 +249,7 @@ type NaabuResult struct {
 	Port int    `json:"port"`
 }
 
-func runNaabu(ips []string, options utils.Options) (map[string][]int, error) {
+func runNaabu(ctx context.Context, ips []string, options utils.Options) (map[string][]int, error) {
 	utils.Banner("Running Port Scanning (naabu)")
 	tempDir := filepath.Join(options.Output, "temp")
 	os.MkdirAll(tempDir, 0755)
@@ -250,7 +260,7 @@ func runNaabu(ips []string, options utils.Options) (map[string][]int, error) {
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(options, "naabu", "-l", tempInputFile, "-silent", "-json")
+	output, err := utils.RunCommandAndCapture(ctx, options, "naabu", "-l", tempInputFile, "-silent", "-json")
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +288,7 @@ type HttpxResult struct {
 	Tech       []string `json:"tech"`
 }
 
-func runHttpx(ports map[string][]int, passiveURLs []string, options utils.Options, db *sql.DB) ([]HttpxResult, error) {
+func runHttpx(ctx context.Context, ports map[string][]int, passiveURLs []string, options utils.Options, db *sql.DB) ([]HttpxResult, error) {
 	utils.Banner("Running Web Server Discovery (httpx)")
 	targets := passiveURLs
 	for host, portList := range ports {
@@ -296,9 +306,15 @@ func runHttpx(ports map[string][]int, passiveURLs []string, options utils.Option
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(options, "httpx", "-l", tempInputFile, "-silent", "-json", "-tech-detect", "-status-code", "-title")
+	output, err := utils.RunCommandAndCapture(ctx, options, "httpx", "-l", tempInputFile, "-silent", "-json", "-tech-detect", "-status-code", "-title")
 	if err != nil {
-		return nil, err
+		utils.Warn(fmt.Sprintf("httpx failed: %v", err))
+		// We return a partial result if possible
+		var results []HttpxResult
+		for _, url := range passiveURLs {
+			results = append(results, HttpxResult{URL: url})
+		}
+		return results, nil
 	}
 
 	var results []HttpxResult

@@ -337,3 +337,22 @@ func GetJavaScriptURLs(db *sql.DB) (map[int]string, error) {
 	}
 	return urls, nil
 }
+
+// GetTargetStrings retrieves all target domains as a slice of strings.
+func GetTargetStrings(db *sql.DB) ([]string, error) {
+	rows, err := db.Query("SELECT DISTINCT domain FROM targets")
+	if err != nil {
+		return nil, fmt.Errorf("could not query targets: %w", err)
+	}
+	defer rows.Close()
+
+	var targets []string
+	for rows.Next() {
+		var domain string
+		if err := rows.Scan(&domain); err != nil {
+			return nil, fmt.Errorf("could not scan target row: %w", err)
+		}
+		targets = append(targets, domain)
+	}
+	return targets, nil
+}

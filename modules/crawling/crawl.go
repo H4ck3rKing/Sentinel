@@ -2,6 +2,7 @@ package crawling
 
 import (
 	"bufio"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -24,7 +25,7 @@ type KatanaOutput struct {
 	} `json:"request"`
 }
 
-func RunCrawl(config *config.Config, db *sql.DB) {
+func RunCrawl(ctx context.Context, config *config.Config, db *sql.DB) {
 	options := utils.Options{
 		Output:  config.Workspace,
 		Threads: config.Recon.Threads, // Not used by crawl, but good for consistency
@@ -74,7 +75,7 @@ func RunCrawl(config *config.Config, db *sql.DB) {
 	if crawlDepth == "0" {
 		crawlDepth = "2" // Default if not set
 	}
-	utils.RunCommand(options, "katana", "-list", katanaInputFile, "-silent", "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
+	utils.RunCommand(ctx, options, "katana", "-list", katanaInputFile, "-silent", "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
 
 	utils.Banner("Parsing katana output and adding new URLs to database")
 	targets, err := database.GetTargets(db)
@@ -125,4 +126,84 @@ func RunCrawl(config *config.Config, db *sql.DB) {
 	}
 
 	color.Green("Crawling phase completed. Found %d new URLs.", newURLsFound)
+}
+
+func RunCrawling(ctx context.Context, cfg *config.Config, db *sql.DB) {
+	utils.Banner("Starting Crawling phase")
+
+	options := utils.Options{
+		Output:  cfg.Workspace,
+		Threads: cfg.Recon.Threads, // Not used by crawl, but good for consistency
+	}
+
+	urls, err := getURLsToCrawl(db)
+	if err != nil || len(urls) == 0 {
+		utils.Warn("No URLs found in the database to crawl. Run 'recon' first.")
+		return
+	}
+
+	for _, url := range urls {
+		runKatana(ctx, url, options, db)
+	}
+
+	utils.Banner("Crawling phase complete.")
+}
+
+func runKatana(ctx context.Context, url string, options utils.Options, db *sql.DB) {
+	// Since we are capturing output, any errors will be returned by the function.
+	output, err := utils.RunCommandAndCapture(ctx, options, "katana", "-u", url, "-silent", "-jc")
+	if err != nil {
+		utils.Error(fmt.Sprintf("Error crawling %s", url), err)
+		return
+	}
+
+	utils.Banner("Parsing katana output and adding new URLs to database")
+	targets, err := database.GetTargets(db)
+	if err != nil {
+		color.Red("Error getting targets from database: %v", err)
+		return
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(output))
+	var newURLsFound int
+	for scanner.Scan() {
+		var katanaOut KatanaOutput
+		line := scanner.Text()
+		if err := json.Unmarshal([]byte(line), &katanaOut); err == nil {
+			newURL := katanaOut.Request.Endpoint
+			var associatedTargetID int = -1
+
+			parsedNewUrl, err := url.Parse(newURL)
+			if err != nil {
+				continue
+			}
+
+			for id, targetDomain := range targets {
+				if strings.HasSuffix(parsedNewUrl.Hostname(), targetDomain) {
+					associatedTargetID = id
+					break
+				}
+			}
+
+			if associatedTargetID != -1 {
+				if _, err := database.AddURL(db, associatedTargetID, newURL, "katana"); err == nil {
+					newURLsFound++
+				}
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		color.Red("Error reading katana output: %v", err)
+	}
+
+	color.Green("Crawling phase completed. Found %d new URLs.", newURLsFound)
+}
+
+func getURLsToCrawl(db *sql.DB) ([]string, error) {
+	urls, err := database.GetLiveURLs(db)
+	if err != nil {
+		return nil, err
+	}
+	return urls, nil
 } 
