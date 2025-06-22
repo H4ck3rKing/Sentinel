@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+# Create a directory to hold our scripts
+mkdir -p /usr/share/sentinel
+
+# Copy the install script to the new directory
+cp /usr/local/bin/install_tools.sh /usr/share/sentinel/install_tools.sh
+chmod +x /usr/share/sentinel/install_tools.sh
+
+# If the install is being run by a user with sudo, SUDO_USER will be set
+if [ -n "$SUDO_USER" ]; then
+    echo "Running dependency installation for user: $SUDO_USER"
+    su - "$SUDO_USER" -c "/usr/share/sentinel/install_tools.sh"
+else
+    # Fallback for direct root installations, though less common for user tools
+    echo "Running dependency installation for root user."
+    /usr/share/sentinel/install_tools.sh
+fi
+
+echo "Sentinel installation complete."
+echo "Please make sure your Go bin path is in your shell's PATH variable."
+echo "Example: export PATH=\$PATH:\$(go env GOPATH)/bin"
+
+exit 0 

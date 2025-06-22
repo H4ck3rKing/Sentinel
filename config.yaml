@@ -1,7 +1,7 @@
-workspace: nust
+workspace: deafult
 targets:
-    - nust.na
+    - example.com
 exclude:
-    - docs.nust.na
+    - docs.example.com
 recon:
     threads: 50
