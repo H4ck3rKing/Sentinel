@@ -4,14 +4,14 @@
 set -e
 
 # --- Configuration ---
-VERSION="2.3.0"
+VERSION=$(grep -oP 'Version: \K.*' debian/DEBIAN/control)
 ARCH="amd64"
 PACKAGE_NAME="sentinel"
 DEB_NAME="${PACKAGE_NAME}_${VERSION}_${ARCH}"
 
 # --- Build ---
 echo "[*] Building the Sentinel binary..."
-go build -o sentinel .
+/usr/local/go/bin/go build -o sentinel .
 
 # --- Staging ---
 echo "[*] Creating Debian package structure..."
