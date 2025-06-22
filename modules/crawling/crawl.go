@@ -13,9 +13,10 @@ import (
 	"strings"
 
 	"sentinel/modules/config"
-	"github.com/fatih/color"
 	"sentinel/modules/database"
 	"sentinel/modules/utils"
+
+	"github.com/fatih/color"
 )
 
 // KatanaOutput represents the structure of a single JSON line from katana output
@@ -69,13 +70,24 @@ func RunCrawl(ctx context.Context, config *config.Config, db *sql.DB) {
 	}
 	file.Close()
 
+	absInputFile, err := filepath.Abs(katanaInputFile)
+	if err != nil {
+		color.Red("Error getting absolute path for katana input: %v", err)
+		return
+	}
+	absOutputFile, err := filepath.Abs(katanaOutputFile)
+	if err != nil {
+		color.Red("Error getting absolute path for katana output: %v", err)
+		return
+	}
+
 	utils.Banner("Running katana against live URLs")
 	// Use crawl depth from config
 	crawlDepth := strconv.Itoa(config.Crawling.MaxDepth)
 	if crawlDepth == "0" {
 		crawlDepth = "2" // Default if not set
 	}
-	utils.RunCommand(ctx, options, "katana", "-list", katanaInputFile, "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
+	utils.RunCommand(ctx, options, "katana", "-list", absInputFile, "-json", "-depth", crawlDepth, "-o", absOutputFile)
 
 	utils.Banner("Parsing katana output and adding new URLs to database")
 	targets, err := database.GetTargets(db)
@@ -84,7 +96,7 @@ func RunCrawl(ctx context.Context, config *config.Config, db *sql.DB) {
 		return
 	}
 
-	outputFile, err := os.Open(katanaOutputFile)
+	outputFile, err := os.Open(absOutputFile)
 	if err != nil {
 		// It's possible katana found nothing, so the file might not exist.
 		color.Yellow("No katana output file found. Skipping parsing.")
@@ -126,4 +138,4 @@ func RunCrawl(ctx context.Context, config *config.Config, db *sql.DB) {
 	}
 
 	color.Green("Crawling phase completed. Found %d new URLs.", newURLsFound)
-} 
+}

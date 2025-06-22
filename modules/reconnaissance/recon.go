@@ -182,7 +182,12 @@ func runDnsx(ctx context.Context, subdomains []string, options utils.Options) (m
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "dnsx", "-l", tempInputFile, "-json")
+	absInputFile, err := filepath.Abs(tempInputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for dnsx input: %w", err)
+	}
+
+	output, err := utils.RunCommandAndCapture(ctx, options, "dnsx", "-l", absInputFile, "-json")
 	if err != nil {
 		// dnsx can return an error if it fails to resolve anything, which isn't a fatal error for the whole program.
 		// We log it and return an empty map to allow the recon flow to continue.
@@ -269,7 +274,12 @@ func runNaabu(ctx context.Context, ips []string, options utils.Options) (map[str
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "naabu", "-l", tempInputFile, "-json")
+	absInputFile, err := filepath.Abs(tempInputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for naabu input: %w", err)
+	}
+
+	output, err := utils.RunCommandAndCapture(ctx, options, "naabu", "-l", absInputFile, "-json")
 	if err != nil {
 		return nil, err
 	}
@@ -316,7 +326,12 @@ func runHttpx(ctx context.Context, ports map[string][]int, subdomains []string, 
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "httpx", "-l", tempInputFile, "-json", "-tech-detect", "-status-code", "-title")
+	absInputFile, err := filepath.Abs(tempInputFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get absolute path for httpx input: %w", err)
+	}
+
+	output, err := utils.RunCommandAndCapture(ctx, options, "httpx", "-l", absInputFile, "-json", "-tech-detect", "-status-code", "-title")
 	if err != nil {
 		utils.Warn(fmt.Sprintf("httpx failed: %v", err))
 		// We return a partial result if possible

@@ -7,4 +7,4 @@ Maintainer: Andrew Gatsi <andrew.gatsi@tech49originals.com>
 Description: Advanced Bug Bounty Automation Framework
  Sentinel is an advanced, all-in-one bug bounty automation framework written in Go.
  It is designed to streamline reconnaissance, vulnerability scanning, and reporting for security researchers.
-Depends: golang-go, pipx, seclists 
+Depends: golang-go, seclists, libpcap-dev, python3-pip

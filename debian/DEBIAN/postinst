@@ -1,38 +1,24 @@
 #!/bin/sh
 set -e
 
+echo "Running Sentinel post-installation setup..."
+
 # The install script is now located in the same directory as the sentinel binary
 INSTALL_SCRIPT="/usr/local/bin/install_tools.sh"
 
+# Ensure the script is executable
 chmod +x "$INSTALL_SCRIPT"
 
-# If the install is being run by a user with sudo, SUDO_USER will be set.
-# We must run the dependency installer as the regular user, not as root.
-if [ -n "$SUDO_USER" ]; then
-    echo "Running dependency installation for user: $SUDO_USER"
-    su - "$SUDO_USER" -c "$INSTALL_SCRIPT"
-else
-    # Fallback for direct root installations, though less common for user tools.
-    # This might fail for tools like pipx which should not be run as root.
-    echo "WARNING: Running dependency installation as root. This is not recommended."
-    "$INSTALL_SCRIPT"
-fi
-
-echo "Sentinel post-installation complete."
-echo "Please make sure your Go and pipx bin paths are in your shell's PATH."
-echo "Example: export PATH=\$PATH:\$HOME/.local/bin:\$(go env GOPATH)/bin"
-
-if [ -n "$FAILED_TOOLS" ]; then
-    echo "\n[ERROR] Some tools could not be installed:$FAILED_TOOLS"
-    echo "Please try running the script again, or install them manually."
+# Run the dependency installer as root
+# The installer script has been modified to handle system-wide installation of binaries.
+echo "Executing tool installer. This may take a while..."
+if ! "$INSTALL_SCRIPT"; then
+    echo "ERROR: The tool installation script failed. Please check the output above."
+    echo "You can try running it manually: sudo /usr/local/bin/install_tools.sh"
     exit 1
-else
-    echo "\n[SUCCESS] All tools have been successfully installed."
 fi
 
-echo "\n[IMPORTANT] Sentinel has configured your system to automatically set the required PATH."
-echo "For the changes to take effect, please LOG OUT and LOG BACK IN."
-echo "Alternatively, for your current terminal session only, you can run:"
-echo "source /etc/profile.d/sentinel.sh"
+echo "\n[SUCCESS] Sentinel and all its dependencies have been successfully installed."
+echo "You can now run 'sentinel' from your terminal."
 
 exit 0 
