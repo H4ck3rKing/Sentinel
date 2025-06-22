@@ -4,7 +4,7 @@
 set -e
 
 # --- Configuration ---
-VERSION="2.1.0"
+VERSION="2.2.0"
 ARCH="amd64"
 PACKAGE_NAME="sentinel"
 DEB_NAME="${PACKAGE_NAME}_${VERSION}_${ARCH}"
