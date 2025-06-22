@@ -59,9 +59,9 @@ type Config struct {
 // CreateDefaultConfig generates a default config.yaml file.
 func CreateDefaultConfig() (*Config, error) {
 	cfg := &Config{
-		Workspace: "my-first-project",
+		Workspace: "default-workspace",
 		Targets:   []string{"example.com"},
-		Exclude:   []string{"docs.example.com"},
+		Exclude:   []string{},
 		Recon: struct {
 			Threads int `yaml:"threads"`
 		}{

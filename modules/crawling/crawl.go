@@ -75,7 +75,7 @@ func RunCrawl(ctx context.Context, config *config.Config, db *sql.DB) {
 	if crawlDepth == "0" {
 		crawlDepth = "2" // Default if not set
 	}
-	utils.RunCommand(ctx, options, "katana", "-list", katanaInputFile, "-silent", "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
+	utils.RunCommand(ctx, options, "katana", "-list", katanaInputFile, "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
 
 	utils.Banner("Parsing katana output and adding new URLs to database")
 	targets, err := database.GetTargets(db)

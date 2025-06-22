@@ -55,21 +55,15 @@ func RunFuzzing(ctx context.Context, config *config.Config, db *sql.DB) {
 
 	wordlist := config.Fuzzing.Wordlist
 	// If the user hasn't specified a custom wordlist in config.yaml,
-	// use the default wordlist that is packaged with the application.
+	// use a high-quality default from the 'seclists' package.
 	if wordlist == "" {
-		wordlist = "/usr/share/sentinel/wordlists/default.txt"
+		wordlist = "/usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt"
 	}
 
 	if _, err := os.Stat(wordlist); os.IsNotExist(err) {
-		// As a last resort, check the local path for development environments.
-		localWordlist := "wordlists/default.txt"
-		if _, err := os.Stat(localWordlist); err == nil {
-			wordlist = localWordlist
-		} else {
-			utils.Error(fmt.Sprintf("Fuzzing wordlist not found at default location: %s", wordlist), err)
-			utils.Warn("Please ensure Sentinel is installed correctly or specify a valid wordlist path in config.yaml.")
-			return
-		}
+		utils.Error("Default wordlist not found. This should be installed automatically with the 'seclists' package.", err)
+		utils.Warn("Please ensure Sentinel and its dependencies are installed correctly.")
+		return
 	}
 
 	utils.Banner("Fetching live URLs to determine base targets for fuzzing")

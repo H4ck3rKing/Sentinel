@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -186,9 +187,39 @@ func executor(in string) {
 		addType, value := args[0], strings.Join(args[1:], " ")
 		switch addType {
 		case "target":
-			appConfig.Targets = append(appConfig.Targets, value)
-			database.AddTarget(db, value) // Also add to DB
-			color.Green("Added '%s' to targets.", value)
+			// --- Intelligent Target Parsing ---
+			// Normalize the input by adding a default scheme if one isn't present.
+			var normalizedInput = value
+			if !strings.HasPrefix(normalizedInput, "http://") && !strings.HasPrefix(normalizedInput, "https://") {
+				normalizedInput = "http://" + normalizedInput
+			}
+
+			parsedURL, err := url.Parse(normalizedInput)
+			if err != nil {
+				color.Red("Invalid target format: %v", err)
+				return
+			}
+
+			// We only want the hostname for our tools.
+			hostname := parsedURL.Hostname()
+			if hostname == "" {
+				color.Red("Could not extract a valid domain/IP from '%s'", value)
+				return
+			}
+
+			// Check for duplicates before adding.
+			for _, t := range appConfig.Targets {
+				if t == hostname {
+					color.Yellow("Target '%s' is already in scope.", hostname)
+					return
+				}
+			}
+
+			appConfig.Targets = append(appConfig.Targets, hostname)
+			database.AddTarget(db, hostname) // Also add to DB
+			color.Green("Parsed and added '%s' to targets.", hostname)
+			color.Yellow("Hint: Use 'run recon' to start discovery.")
+
 		case "exclude":
 			appConfig.Exclude = append(appConfig.Exclude, value)
 			color.Green("Added '%s' to exclusions.", value)

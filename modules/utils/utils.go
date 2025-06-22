@@ -62,14 +62,14 @@ func RunCommandAndCapture(ctx context.Context, options Options, name string, arg
 	cmd.Dir = options.Output
 
 	var out bytes.Buffer
+	// To provide verbose output, we'll pipe stderr to the user's terminal in real-time.
 	cmd.Stdout = &out
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
+	cmd.Stderr = os.Stderr
 
 	err := cmd.Run()
 	if err != nil {
-		// Return the error along with stderr for better debugging
-		return "", fmt.Errorf("command failed: %v\nstderr: %s", err, stderr.String())
+		// Stderr was already printed, so we just return the error.
+		return "", fmt.Errorf("command failed: %v", err)
 	}
 	return out.String(), nil
 }

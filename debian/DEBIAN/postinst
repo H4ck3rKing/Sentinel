@@ -22,4 +22,17 @@ echo "Sentinel post-installation complete."
 echo "Please make sure your Go and pipx bin paths are in your shell's PATH."
 echo "Example: export PATH=\$PATH:\$HOME/.local/bin:\$(go env GOPATH)/bin"
 
+if [ -n "$FAILED_TOOLS" ]; then
+    echo "\n[ERROR] Some tools could not be installed:$FAILED_TOOLS"
+    echo "Please try running the script again, or install them manually."
+    exit 1
+else
+    echo "\n[SUCCESS] All tools have been successfully installed."
+fi
+
+echo "\n[IMPORTANT] Sentinel has configured your system to automatically set the required PATH."
+echo "For the changes to take effect, please LOG OUT and LOG BACK IN."
+echo "Alternatively, for your current terminal session only, you can run:"
+echo "source /etc/profile.d/sentinel.sh"
+
 exit 0 

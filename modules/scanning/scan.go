@@ -87,7 +87,7 @@ func runNuclei(ctx context.Context, urls []string, options utils.Options, cfg *c
 	defer os.Remove(tempInputFile)
 
 	// Base command arguments
-	args := []string{"-l", tempInputFile, "-silent", "-jsonl"}
+	args := []string{"-l", tempInputFile, "-jsonl"}
 
 	// Adjust templates based on intensity
 	switch cfg.Scanning.Intensity {

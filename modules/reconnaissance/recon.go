@@ -141,7 +141,7 @@ func runSubfinder(ctx context.Context, target string, options utils.Options, cfg
 		utils.Success("Using GitHub API key for subfinder.")
 	}
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "subfinder", "-d", target, "-silent")
+	output, err := utils.RunCommandAndCapture(ctx, options, "subfinder", "-d", target)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func runDnsx(ctx context.Context, subdomains []string, options utils.Options) (m
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "dnsx", "-l", tempInputFile, "-silent", "-json")
+	output, err := utils.RunCommandAndCapture(ctx, options, "dnsx", "-l", tempInputFile, "-json")
 	if err != nil {
 		// dnsx can return an error if it fails to resolve anything, which isn't a fatal error for the whole program.
 		// We log it and return an empty map to allow the recon flow to continue.
@@ -260,7 +260,7 @@ func runNaabu(ctx context.Context, ips []string, options utils.Options) (map[str
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "naabu", "-l", tempInputFile, "-silent", "-json")
+	output, err := utils.RunCommandAndCapture(ctx, options, "naabu", "-l", tempInputFile, "-json")
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +306,7 @@ func runHttpx(ctx context.Context, ports map[string][]int, passiveURLs []string,
 	}
 	defer os.Remove(tempInputFile)
 
-	output, err := utils.RunCommandAndCapture(ctx, options, "httpx", "-l", tempInputFile, "-silent", "-json", "-tech-detect", "-status-code", "-title")
+	output, err := utils.RunCommandAndCapture(ctx, options, "httpx", "-l", tempInputFile, "-json", "-tech-detect", "-status-code", "-title")
 	if err != nil {
 		utils.Warn(fmt.Sprintf("httpx failed: %v", err))
 		// We return a partial result if possible
