@@ -16,9 +16,9 @@
     ██╔════╝██╔════╝████╗  ██║╚══██╔══╝██║████╗  ██║██╔════╝██║
     ███████╗█████╗  ██╔██╗ ██║   ██║   ██║██╔██╗ ██║█████╗  ██║
     ╚════██║██╔══╝  ██║╚██╗██║   ██║   ██║██║╚██╗██║██╔══╝  ██║
-    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
+    ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚██████║███████╗███████╗
     ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
-                                                         v2.0
+                                                         v2.4.0
 
 <p align="center"><b>Developed by: Andrew Gatsi</b></p>
 
@@ -58,7 +58,7 @@ Want to get scanning immediately? Here's how:
 1.  **Install the `.deb` package**:
     ```sh
     # Download the latest .deb file from the Releases page
-    sudo dpkg -i ./sentinel_*.deb
+    sudo apt install ./sentinel_*.deb
     ```
 2.  **Run Sentinel**:
     ```sh
@@ -73,20 +73,21 @@ Want to get scanning immediately? Here's how:
 
 ## 🛠️ Installation
 
-### From `.deb` Package (Recommended)
+### From `.deb` Package (Recommended on Debian/Ubuntu/Kali)
 
-This is the easiest and recommended way to install Sentinel on Debian-based systems (like Ubuntu, Kali, etc.).
+This is the easiest and most reliable way to install Sentinel on Debian-based systems. This method automatically handles all required system dependencies.
 
 1.  **Download the latest release**: Go to the [**Releases**](https://github.com/H4ck3rKing/Sentinel/releases) page on GitHub and download the most recent `sentinel_*.deb` file.
 
-2.  **Install the package**: Open your terminal, navigate to the directory where you downloaded the file, and run the following command:
+2.  **Install the package**: Open your terminal, navigate to the directory where you downloaded the file, and run the following command. The `./` is important!
     ```sh
-    sudo dpkg -i sentinel_*.deb
+    # Make sure to replace sentinel_*.deb with the actual file name
+    sudo apt install ./sentinel_*.deb
     ```
     The installer will automatically:
     - Place the `sentinel` binary in `/usr/local/bin`, making it accessible from anywhere.
-    - Install system dependencies like `golang-go` and `pipx`.
-    - Run the `install_tools.sh` script to install all third-party Go and Python tools for the user who ran the command.
+    - Install all required system packages (like `golang-go`, `seclists`, `libpcap-dev`, etc.) using `apt`.
+    - Run the `postinst` script to install all third-party Go and Python tools system-wide.
 
 3.  **Run Sentinel**: That's it! You can now run the toolkit from any terminal window.
     ```sh
