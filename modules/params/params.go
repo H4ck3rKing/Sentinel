@@ -45,13 +45,12 @@ func RunParams(config *config.Config, db *sql.DB) {
 
 	paramsFoundCount := 0
 	for urlStr, urlID := range urls {
-		color.White("Scanning: %s", urlStr)
+		utils.Log(fmt.Sprintf("Scanning: %s", urlStr))
 
-		arjunCmd := fmt.Sprintf("arjun -u %s -oJ /dev/stdout --stable", urlStr)
-		output, err := utils.RunCommandAndCapture(arjunCmd, options)
+		output, err := utils.RunCommandAndCapture(options, "arjun", "-u", urlStr, "-oJ", "/dev/stdout", "--stable")
 		if err != nil {
 			if len(output) == 0 {
-				color.Yellow("Error running arjun on %s: %v", urlStr, err)
+				utils.Warn(fmt.Sprintf("Error running arjun on %s: %v", urlStr, err))
 				continue
 			}
 		}
@@ -68,13 +67,13 @@ func RunParams(config *config.Config, db *sql.DB) {
 				for _, param := range params {
 					database.AddParameter(db, urlID, param, "arjun")
 					paramsFoundCount++
-					color.HiGreen("  [+] Found parameter: %s", param)
+					utils.Success(fmt.Sprintf("  [+] Found parameter: %s", param))
 				}
 			}
 		} else {
-			color.Yellow("Failed to parse arjun output for %s: %v", urlStr, err)
+			utils.Warn(fmt.Sprintf("Failed to parse arjun output for %s: %v", urlStr, err))
 		}
 	}
 
-	color.Green("Parameter discovery phase completed. Found %d new parameters.", paramsFoundCount)
+	utils.Success(fmt.Sprintf("Parameter discovery phase completed. Found %d new parameters.", paramsFoundCount))
 } 

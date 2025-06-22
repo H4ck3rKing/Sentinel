@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"bug/modules/config"
@@ -18,6 +19,7 @@ import (
 	"bug/modules/reporting"
 	"bug/modules/scanning"
 	"bug/modules/secrets"
+	"bug/modules/utils"
 	"bug/modules/visual"
 
 	"github.com/c-bata/go-prompt"
@@ -30,8 +32,8 @@ var db *sql.DB
 // Command and option suggestions for the completer
 var commands = []prompt.Suggest{
 	{Text: "help", Description: "Show the help menu"},
-	{Text: "add", Description: "Add a value to a configuration list (e.g. add target nust.na)"},
-	{Text: "remove", Description: "Remove a value from a list (e.g. remove target nust.na)"},
+	{Text: "add", Description: "Add a value to a configuration list (e.g. add target example.com)"},
+	{Text: "remove", Description: "Remove a value from a list (e.g. remove target example.com)"},
 	{Text: "show", Description: "Show the current configuration from config.yaml"},
 	{Text: "run", Description: "Run a module (e.g. 'run recon')"},
 	{Text: "banner", Description: "Display the Sentinel banner"},
@@ -66,12 +68,13 @@ func printBanner() {
     ███████║███████╗██║ ╚████║   ██║   ██║██║ ╚████║███████╗███████╗
     ╚══════╝╚══════╝╚═╝  ╚═══╝   ╚═╝   ╚═╝╚═╝  ╚═══╝╚══════╝╚══════╝
 `
-	cyan := color.New(color.FgCyan).SprintFunc()
+	// Create color functions
+	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
-	purple := color.New(color.FgHiMagenta).SprintFunc()
+	gray := color.New(color.FgHiBlack).SprintFunc()
 
 	fmt.Println(cyan(banner))
-	fmt.Printf("               %s Framework v2.0 %s\n", yellow("Sentinel"), purple("by Andrew Gatsi"))
+	fmt.Printf("               %s Framework v2.0 %s\n", yellow("Sentinel"), gray("by Andrew Gatsi"))
 	fmt.Println()
 }
 
@@ -148,30 +151,37 @@ func executor(in string) {
 			color.Red("Unknown module: %s", module)
 		}
 	case "add":
-		if len(args) != 2 {
+		if len(args) < 2 {
 			color.Red("Usage: add <type> <value> (e.g., add target example.com)")
 			return
 		}
-		addType, value := args[0], args[1]
-		if addType == "target" {
+		addType, value := args[0], strings.Join(args[1:], " ")
+		switch addType {
+		case "target":
 			appConfig.Targets = append(appConfig.Targets, value)
 			database.AddTarget(db, value) // Also add to DB
 			color.Green("Added '%s' to targets.", value)
-		} else {
-			color.Red("Unknown type '%s'. Can only add 'target'.", addType)
-			return
+		case "exclude":
+			appConfig.Exclude = append(appConfig.Exclude, value)
+			color.Green("Added '%s' to exclusions.", value)
+		default:
+			color.Red("Unknown type '%s'. Can only add 'target' or 'exclude'.", addType)
 		}
 	case "remove":
-		if len(args) != 2 {
+		if len(args) < 2 {
 			color.Red("Usage: remove <type> <value>")
 			return
 		}
-		removeType, value := args[0], args[1]
-		if removeType == "target" {
-			appConfig.Targets = removeTarget(appConfig.Targets, value)
+		removeType, value := args[0], strings.Join(args[1:], " ")
+		switch removeType {
+		case "target":
+			appConfig.Targets = removeStringFromSlice(appConfig.Targets, value)
 			color.Green("Removed '%s' from targets.", value)
-		} else {
-			color.Red("Unknown type '%s'.", removeType)
+		case "exclude":
+			appConfig.Exclude = removeStringFromSlice(appConfig.Exclude, value)
+			color.Green("Removed '%s' from exclusions.", value)
+		default:
+			color.Red("Unknown type '%s'. Can only remove 'target' or 'exclude'.", removeType)
 		}
 
 	default:
@@ -199,67 +209,117 @@ func completer(d prompt.Document) []prompt.Suggest {
 	return []prompt.Suggest{}
 }
 
-func removeTarget(targets []string, targetToRemove string) []string {
-	var newTargets []string
-	for _, t := range targets {
-		if t != targetToRemove {
-			newTargets = append(newTargets, t)
+func removeStringFromSlice(slice []string, itemToRemove string) []string {
+	var newSlice []string
+	for _, i := range slice {
+		if i != itemToRemove {
+			newSlice = append(newSlice, i)
 		}
 	}
-	return newTargets
+	return newSlice
 }
 
 func showHelp() {
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	green := color.New(color.FgGreen).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
+	white := color.New(color.FgWhite).SprintFunc()
 
 	fmt.Println("\n" + cyan("Core Commands:"))
-	fmt.Printf("  %-8s Show this help menu\n", green("help"))
-	fmt.Printf("  %-8s Display the current configuration from %s\n", green("show"), yellow("config.yaml"))
-	fmt.Printf("  %-8s Run a module (e.g., %s)\n", green("run"), yellow("run recon"))
-	fmt.Printf("  %-8s Add a target (e.g., %s)\n", green("add"), yellow("add target example.com"))
-	fmt.Printf("  %-8s Remove a target (e.g., %s)\n", green("remove"), yellow("remove target example.com"))
-	fmt.Printf("  %-8s Display the application banner\n", green("banner"))
-	fmt.Printf("  %-8s Clear the terminal screen\n", green("clear"))
-	fmt.Printf("  %-8s Exit the framework\n", green("exit"))
+	fmt.Printf("  %-20s %s\n", green("help"), white("Show this help menu"))
+	fmt.Printf("  %-20s %s (e.g., %s)\n", green("add target"), white("Add a target to the scope"), yellow("add target example.com"))
+	fmt.Printf("  %-20s %s (e.g., %s)\n", green("remove target"), white("Remove a target from the scope"), yellow("remove target example.com"))
+	fmt.Printf("  %-20s %s (e.g., %s)\n", green("run"), white("Run a module"), yellow("run recon"))
+	fmt.Printf("  %-20s %s\n", green("show"), white("Display the current configuration"))
+	fmt.Printf("  %-20s %s\n", green("banner"), white("Display the application banner"))
+	fmt.Printf("  %-20s %s\n", green("clear"), white("Clear the terminal screen"))
+	fmt.Printf("  %-20s %s\n", green("exit"), white("Exit the framework"))
+
+	fmt.Println("\n" + cyan("Available Modules for 'run':"))
+	for _, opt := range runOptions {
+		fmt.Printf("  %-20s %s\n", green(opt.Text), white(opt.Description))
+	}
 	fmt.Println()
 }
 
 func showOptions() {
 	cyan := color.New(color.FgCyan, color.Bold).SprintFunc()
 	yellow := color.New(color.FgYellow).SprintFunc()
+	white := color.New(color.FgWhite).SprintFunc()
+	gray := color.New(color.FgHiBlack).SprintFunc()
 
-	fmt.Println("\n" + cyan("Current Configuration from "+config.ConfigFileName+":"))
-	fmt.Printf("  %-15s : %s\n", yellow("Workspace"), appConfig.Workspace)
-	fmt.Printf("  %-15s : %s\n", yellow("Targets"), strings.Join(appConfig.Targets, ", "))
-	fmt.Printf("  %-15s : %d\n", yellow("Recon Threads"), appConfig.Recon.Threads)
+	fmt.Println("\n" + cyan("--- Current Configuration ("+config.ConfigFileName+") ---"))
+	fmt.Printf("  %-20s : %s\n", yellow("Workspace"), white(appConfig.Workspace))
+	fmt.Printf("  %-20s : %s\n", yellow("Targets"), white(strings.Join(appConfig.Targets, ", ")))
+	fmt.Printf("  %-20s : %s\n", yellow("Exclude"), white(strings.Join(appConfig.Exclude, ", ")))
 	fmt.Println()
+
+	fmt.Printf("  %s\n", cyan("API Keys:"))
+	fmt.Printf("    %-18s : %s\n", yellow("GitHub"), white(appConfig.APIKeys.GitHub)+gray(" (set for better subdomain results)"))
+	fmt.Println()
+
+	fmt.Printf("  %s\n", cyan("Module Settings:"))
+	fmt.Printf("    %-18s : %s\n", yellow("Recon Threads"), white(strconv.Itoa(appConfig.Recon.Threads)))
+	fmt.Printf("    %-18s : %s\n", yellow("Fuzzing Wordlist"), white(appConfig.Fuzzing.Wordlist))
+	fmt.Printf("    %-18s : %s\n", yellow("Scanning Intensity"), white(appConfig.Scanning.Intensity))
+	fmt.Printf("    %-18s : %s\n", yellow("Crawling Max Depth"), white(strconv.Itoa(appConfig.Crawling.MaxDepth)))
+	fmt.Printf("    %-18s : %s\n", yellow("Reporting Format"), white(appConfig.Reporting.Format))
+	fmt.Println(cyan("-------------------------------------------\n"))
 }
 
 func changeLivePrefix() (string, bool) {
 	if appConfig != nil && appConfig.Workspace != "" {
-		return fmt.Sprintf("[%s]> ", appConfig.Workspace), true
+		prompt := fmt.Sprintf("[sentinel|%s]> ", appConfig.Workspace)
+		return prompt, true
 	}
-	return "[sentinel]> ", true
+	prompt := "[sentinel]> "
+	return prompt, true
+}
+
+func checkDependencies() {
+	color.New(color.FgYellow).Println("[*] Checking for required tools...")
+	requiredTools := []string{
+		"subfinder", "dnsx", "naabu", "httpx", "katana", "gau",
+		"ffuf", "gowitness", "trufflehog", "arjun",
+	}
+	missingTools := false
+	for _, tool := range requiredTools {
+		if !utils.CommandExists(tool) {
+			color.Red("  [!] %s is not installed or not in your PATH.", tool)
+			missingTools = true
+		} else {
+			color.Green("  [✔] %s is installed.", tool)
+		}
+	}
+
+	if missingTools {
+		color.New(color.FgRed, color.Bold).Println("\n[!] Some tools are missing.")
+		color.Yellow("Please run the './install_tools.sh' script to install all dependencies.")
+		color.Yellow("Then, ensure your GOPATH/bin is in your system's PATH environment variable.")
+		color.Yellow("Ex: export PATH=$PATH:$(go env GOPATH)/bin")
+		os.Exit(1)
+	} else {
+		color.New(color.FgGreen).Println("\n[✔] All required tools are installed.")
+	}
+	fmt.Println()
 }
 
 func main() {
+	checkDependencies()
+
 	var err error
 	appConfig, err = config.LoadConfig()
 	if err != nil {
 		if os.IsNotExist(err) {
-			color.Yellow("Configuration file not found.")
-			color.Green("Creating a default 'config.yaml' for you...")
+			color.Yellow("Configuration file not found. Creating a default 'config.yaml'...")
 			appConfig, err = config.CreateDefaultConfig()
 			if err != nil {
-				color.Red("Fatal: Could not create config file: %v", err)
-			os.Exit(1)
-		}
-			color.Cyan("Default 'config.yaml' created. Please edit it to define your targets and then restart Sentinel.")
-			os.Exit(0)
+				color.Red("Fatal: Could not create default config: %v", err)
+				os.Exit(1)
+			}
+			color.Green("Default 'config.yaml' created. Please edit it to define your targets.")
 		} else {
-			color.Red("Fatal: Could not load config file: %v", err)
+			color.Red("Fatal: Could not load config: %v", err)
 			os.Exit(1)
 		}
 	}
@@ -269,20 +329,21 @@ func main() {
 		color.Red("Fatal: Could not initialize database: %v", err)
 		os.Exit(1)
 	}
-	defer db.Close()
-
-	// Sync targets from config file to database on startup
-	for _, target := range appConfig.Targets {
-		database.AddTarget(db, target)
-	}
+	// The defer should be right after the successful initialization
+	// defer db.Close() // This causes issues with the interactive prompt loop
 
 	printBanner()
+
+	// Initial clear of the screen for a clean start
+	clearScreen()
+	printBanner() // Reprint banner after clearing
+
 	p := prompt.New(
 		executor,
 		completer,
-		prompt.OptionPrefix("[sentinel]> "),
+		prompt.OptionPrefix("[-] "),
 		prompt.OptionLivePrefix(changeLivePrefix),
-		prompt.OptionTitle("sentinel"),
+		prompt.OptionTitle("Sentinel"),
 	)
 	p.Run()
 }

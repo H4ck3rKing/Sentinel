@@ -14,6 +14,7 @@ import (
 type Options struct {
 	Output  string
 	Threads int
+	Env     map[string]string
 }
 
 // CommandExists checks if a command exists in the system's PATH.
@@ -29,10 +30,15 @@ func Banner(text string) {
 
 // RunCommand executes an external command and prints its output.
 // It is a simplified version for better UI control.
-func RunCommand(command string, options Options) error {
-	fmt.Println(color.GreenString("▶ Running: %s", command))
-	parts := strings.Fields(command)
-	cmd := exec.Command(parts[0], parts[1:]...)
+func RunCommand(options Options, name string, args ...string) error {
+	fmt.Println(color.GreenString("▶ Running: %s %s", name, strings.Join(args, " ")))
+	cmd := exec.Command(name, args...)
+	if options.Env != nil {
+		cmd.Env = os.Environ()
+		for k, v := range options.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	// The new modules often need to be run from the workspace directory
@@ -42,10 +48,15 @@ func RunCommand(command string, options Options) error {
 }
 
 // RunCommandAndCapture executes a command and returns its output.
-func RunCommandAndCapture(command string, options Options) (string, error) {
-	fmt.Println(color.GreenString("▶ Capturing: %s", command))
-	parts := strings.Fields(command)
-	cmd := exec.Command(parts[0], parts[1:]...)
+func RunCommandAndCapture(options Options, name string, args ...string) (string, error) {
+	fmt.Println(color.GreenString("▶ Capturing: %s %s", name, strings.Join(args, " ")))
+	cmd := exec.Command(name, args...)
+	if options.Env != nil {
+		cmd.Env = os.Environ()
+		for k, v := range options.Env {
+			cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", k, v))
+		}
+	}
 	cmd.Dir = options.Output
 
 	var out bytes.Buffer

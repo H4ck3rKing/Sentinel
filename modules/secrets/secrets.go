@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -97,10 +96,9 @@ func RunSecrets(config *config.Config, db *sql.DB) {
 		tmpFile.Write(body)
 		tmpFile.Close()
 
-		truffleCmd := fmt.Sprintf("trufflehog filesystem %s --json", tmpFile.Name())
 		// We use RunCommandAndCapture since trufflehog might print a lot of stuff to stderr
 		// that we don't want to pollute the main UI with. The output is what matters.
-		output, err := utils.RunCommandAndCapture(truffleCmd, options)
+		output, err := utils.RunCommandAndCapture(options, "trufflehog", "filesystem", tmpFile.Name(), "--json")
 		if err != nil {
 			// trufflehog exits with non-zero if it finds secrets, so we can't rely on the exit code
 			// but we should still log if there's a different kind of error.

@@ -1,6 +1,7 @@
-workspace: ""
+workspace: nust
 targets:
     - nust.na
-    - nust.na
+exclude:
+    - docs.nust.na
 recon:
-    threads: 0
+    threads: 50

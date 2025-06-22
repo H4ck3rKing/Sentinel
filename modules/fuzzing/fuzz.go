@@ -52,10 +52,15 @@ func RunFuzzing(config *config.Config, db *sql.DB) {
 		return
 	}
 
-	wordlist := "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt"
+	wordlist := config.Fuzzing.Wordlist
+	if wordlist == "" {
+		wordlist = "/usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt"
+		utils.Warn(fmt.Sprintf("No fuzzing wordlist specified in config, using default: %s", wordlist))
+	}
+
 	if _, err := os.Stat(wordlist); os.IsNotExist(err) {
-		color.Red("Default wordlist not found at: %s", wordlist)
-		color.Yellow("Please install a common wordlist package (e.g., `sudo apt install dirbuster`) or specify a different path.")
+		utils.Error(fmt.Sprintf("Fuzzing wordlist not found at: %s", wordlist), err)
+		utils.Warn("Please install a common wordlist package (e.g., `sudo apt install seclists`) or specify a valid path in config.yaml.")
 		return
 	}
 
@@ -81,11 +86,10 @@ func RunFuzzing(config *config.Config, db *sql.DB) {
 
 	newURLsFound := 0
 	for _, baseURL := range baseURLs {
-		color.White("Fuzzing: %s", baseURL)
-		ffufCmd := fmt.Sprintf("ffuf -w %s -u %s/FUZZ -ac -o /dev/stdout -of json", wordlist, baseURL)
-		output, err := utils.RunCommandAndCapture(ffufCmd, options)
+		utils.Log(fmt.Sprintf("Fuzzing: %s", baseURL))
+		output, err := utils.RunCommandAndCapture(options, "ffuf", "-w", wordlist, "-u", baseURL+"/FUZZ", "-ac", "-o", "/dev/stdout", "-of", "json")
 		if err != nil && len(output) == 0 {
-			color.Yellow("Error running ffuf on %s: %v", baseURL, err)
+			utils.Warn(fmt.Sprintf("Error running ffuf on %s: %v", baseURL, err))
 			continue
 		}
 
@@ -115,9 +119,9 @@ func RunFuzzing(config *config.Config, db *sql.DB) {
 				}
 			}
 		} else {
-			color.Yellow("Failed to parse ffuf output for %s: %v", baseURL, err)
+			utils.Warn(fmt.Sprintf("Failed to parse ffuf output for %s: %v", baseURL, err))
 		}
 	}
 
-	color.Green("Fuzzing phase completed. Found %d new URLs.", newURLsFound)
+	utils.Success(fmt.Sprintf("Fuzzing phase completed. Found %d new URLs.", newURLsFound))
 }

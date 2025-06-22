@@ -11,36 +11,34 @@ import (
 	"strings"
 
 	"bug/modules/config"
+	"bug/modules/database"
 	"bug/modules/utils"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 // RunReconnaissance orchestrates the full reconnaissance workflow.
 func RunReconnaissance(cfg *config.Config, db *sql.DB) {
+	for _, target := range cfg.Targets {
+		runForTarget(target, cfg, db)
+	}
+}
+
+func runForTarget(target string, cfg *config.Config, db *sql.DB) {
+	utils.Banner(fmt.Sprintf("Starting reconnaissance for target: %s", target))
+
 	options := utils.Options{
 		Output:  cfg.Workspace,
 		Threads: cfg.Recon.Threads,
 	}
 
-	for _, target := range cfg.Targets {
-		runForTarget(target, options, db)
-	}
-}
-
-func runForTarget(target string, options utils.Options, db *sql.DB) {
-	utils.Banner(fmt.Sprintf("Starting reconnaissance for target: %s", target))
-
-	var targetID int64
-	// This logic needs to be updated to use the AddTarget function
-	// For now, we assume the target exists from the initial setup.
-	db.QueryRow("SELECT id FROM targets WHERE target = ?", target).Scan(&targetID)
-	if targetID == 0 {
-		utils.Error(fmt.Sprintf("Could not find target ID for %s", target), nil)
+	targetID, err := database.AddTarget(db, target)
+	if err != nil {
+		utils.Error(fmt.Sprintf("Could not add or get target ID for %s", target), err)
 		return
 	}
 
 	// --- Phase 1: Subdomain Enumeration ---
-	subdomains, err := runSubfinder(target, options)
+	subdomains, err := runSubfinder(target, options, cfg)
 	if err != nil {
 		return // Error already logged
 	}
@@ -51,6 +49,21 @@ func runForTarget(target string, options utils.Options, db *sql.DB) {
 		}
 	}
 	utils.Success(fmt.Sprintf("Found %d subdomains.", len(subdomains)))
+
+	// --- Phase 1.5: Passive URL Discovery ---
+	gauURLs, err := runGau(target, options)
+	if err != nil {
+		// This is a soft error, passive discovery might fail
+		utils.Warn(fmt.Sprintf("gau passive discovery failed: %v", err))
+	} else {
+		for _, u := range gauURLs {
+			_, err := db.Exec("INSERT OR IGNORE INTO urls(target_id, url, source) VALUES(?, ?, ?)", targetID, u, "gau")
+			if err != nil {
+				utils.Warn(fmt.Sprintf("Failed to insert gau URL %s: %v", u, err))
+			}
+		}
+		utils.Success(fmt.Sprintf("Found %d URLs via passive discovery.", len(gauURLs)))
+	}
 
 	// --- Phase 2: DNS Resolution ---
 	liveSubdomains, err := runDnsx(subdomains, options)
@@ -99,7 +112,14 @@ func runForTarget(target string, options utils.Options, db *sql.DB) {
 	utils.Success(fmt.Sprintf("Found open ports for %d hosts.", len(openPorts)))
 
 	// --- Phase 4: Web Server Discovery ---
-	liveURLs, err := runHttpx(openPorts, options, db)
+	// First, get URLs from passive discovery
+	urls, err := getURLsForTarget(db, targetID)
+	if err != nil {
+		utils.Warn("Could not get URLs from database for httpx.")
+		urls = []string{}
+	}
+
+	liveURLs, err := runHttpx(openPorts, urls, options, db)
 	if err != nil {
 		return
 	}
@@ -108,14 +128,37 @@ func runForTarget(target string, options utils.Options, db *sql.DB) {
 	utils.Banner(fmt.Sprintf("Reconnaissance complete for: %s", target))
 }
 
-func runSubfinder(target string, options utils.Options) ([]string, error) {
+func runSubfinder(target string, options utils.Options, cfg *config.Config) ([]string, error) {
 	utils.Banner("Running Subdomain Enumeration (subfinder)")
-	subfinderCmd := fmt.Sprintf("subfinder -d %s -silent", target)
-	output, err := utils.RunCommandAndCapture(subfinderCmd, options)
+
+	// Use API keys if available
+	if cfg.APIKeys.GitHub != "" {
+		if options.Env == nil {
+			options.Env = make(map[string]string)
+		}
+		options.Env["GITHUB_TOKEN"] = cfg.APIKeys.GitHub
+		utils.Success("Using GitHub API key for subfinder.")
+	}
+
+	output, err := utils.RunCommandAndCapture(options, "subfinder", "-d", target, "-silent")
 	if err != nil {
 		return nil, err
 	}
 	return strings.Split(strings.TrimSpace(output), "\n"), nil
+}
+
+func runGau(target string, options utils.Options) ([]string, error) {
+	utils.Banner("Running Passive URL Discovery (gau)")
+	output, err := utils.RunCommandAndCapture(options, "gau", target)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(strings.TrimSpace(output), "\n"), nil
+}
+
+type DnsxResult struct {
+	Host string   `json:"host"`
+	IPs  []string `json:"ip"`
 }
 
 func runDnsx(subdomains []string, options utils.Options) (map[string][]string, error) {
@@ -129,19 +172,23 @@ func runDnsx(subdomains []string, options utils.Options) (map[string][]string, e
 	}
 	defer os.Remove(tempInputFile)
 
-	dnsxCmd := fmt.Sprintf("dnsx -l %s -silent -a -resp", tempInputFile)
-	output, err := utils.RunCommandAndCapture(dnsxCmd, options)
+	output, err := utils.RunCommandAndCapture(options, "dnsx", "-l", tempInputFile, "-silent", "-json")
 	if err != nil {
 		return nil, err
 	}
 
 	results := make(map[string][]string)
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		parts := strings.Fields(line)
-		if len(parts) > 1 && strings.HasPrefix(parts[1], "[") {
-			sub := parts[0]
-			ips := strings.Trim(parts[1], "[]")
-			results[sub] = strings.Split(ips, ",")
+		if line == "" {
+			continue
+		}
+		var res DnsxResult
+		if err := json.Unmarshal([]byte(line), &res); err != nil {
+			utils.Warn(fmt.Sprintf("Could not unmarshal dnsx output line: %s", line))
+			continue
+		}
+		if len(res.IPs) > 0 {
+			results[res.Host] = res.IPs
 		}
 	}
 	return results, nil
@@ -169,6 +216,29 @@ func getIPsForTarget(db *sql.DB, targetID int64) ([]string, error) {
 	return ips, nil
 }
 
+func getURLsForTarget(db *sql.DB, targetID int64) ([]string, error) {
+	rows, err := db.Query("SELECT url FROM urls WHERE target_id = ?", targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var urls []string
+	for rows.Next() {
+		var url string
+		if err := rows.Scan(&url); err != nil {
+			return nil, err
+		}
+		urls = append(urls, url)
+	}
+	return urls, nil
+}
+
+type NaabuResult struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
 func runNaabu(ips []string, options utils.Options) (map[string][]int, error) {
 	utils.Banner("Running Port Scanning (naabu)")
 	tempDir := filepath.Join(options.Output, "temp")
@@ -180,24 +250,22 @@ func runNaabu(ips []string, options utils.Options) (map[string][]int, error) {
 	}
 	defer os.Remove(tempInputFile)
 
-	naabuCmd := fmt.Sprintf("naabu -l %s -silent", tempInputFile)
-	output, err := utils.RunCommandAndCapture(naabuCmd, options)
+	output, err := utils.RunCommandAndCapture(options, "naabu", "-l", tempInputFile, "-silent", "-json")
 	if err != nil {
 		return nil, err
 	}
 
 	results := make(map[string][]int)
 	for _, line := range strings.Split(strings.TrimSpace(output), "\n") {
-		parts := strings.Split(line, ":")
-		if len(parts) != 2 {
+		if line == "" {
 			continue
 		}
-		host := parts[0]
-		port, err := strconv.Atoi(parts[1])
-		if err != nil {
+		var res NaabuResult
+		if err := json.Unmarshal([]byte(line), &res); err != nil {
+			utils.Warn(fmt.Sprintf("Could not unmarshal naabu output line: %s", line))
 			continue
 		}
-		results[host] = append(results[host], port)
+		results[res.Host] = append(results[res.Host], res.Port)
 	}
 	return results, nil
 }
@@ -210,9 +278,9 @@ type HttpxResult struct {
 	Tech       []string `json:"tech"`
 }
 
-func runHttpx(ports map[string][]int, options utils.Options, db *sql.DB) ([]HttpxResult, error) {
+func runHttpx(ports map[string][]int, passiveURLs []string, options utils.Options, db *sql.DB) ([]HttpxResult, error) {
 	utils.Banner("Running Web Server Discovery (httpx)")
-	var targets []string
+	targets := passiveURLs
 	for host, portList := range ports {
 		for _, port := range portList {
 			targets = append(targets, fmt.Sprintf("%s:%d", host, port))
@@ -228,8 +296,7 @@ func runHttpx(ports map[string][]int, options utils.Options, db *sql.DB) ([]Http
 	}
 	defer os.Remove(tempInputFile)
 
-	httpxCmd := fmt.Sprintf("httpx -l %s -silent -json -tech-detect -status-code -title", tempInputFile)
-	output, err := utils.RunCommandAndCapture(httpxCmd, options)
+	output, err := utils.RunCommandAndCapture(options, "httpx", "-l", tempInputFile, "-silent", "-json", "-tech-detect", "-status-code", "-title")
 	if err != nil {
 		return nil, err
 	}

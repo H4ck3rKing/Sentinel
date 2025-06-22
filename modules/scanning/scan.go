@@ -45,7 +45,7 @@ func RunScan(cfg *config.Config, db *sql.DB) {
 	}
 
 	// 2. Run Nuclei on the discovered URLs
-	results, err := runNuclei(urls, options)
+	results, err := runNuclei(urls, options, cfg)
 	if err != nil {
 		utils.Error("Error running Nuclei scan", err)
 		return
@@ -73,7 +73,7 @@ func RunScan(cfg *config.Config, db *sql.DB) {
 	utils.Success(fmt.Sprintf("Vulnerability scan complete. Found and saved %d potential vulnerabilities.", savedCount))
 }
 
-func runNuclei(urls []string, options utils.Options) ([]NucleiResult, error) {
+func runNuclei(urls []string, options utils.Options, cfg *config.Config) ([]NucleiResult, error) {
 	utils.Banner(fmt.Sprintf("Running Nuclei on %d URLs...", len(urls)))
 
 	tempDir := filepath.Join(options.Output, "temp")
@@ -85,8 +85,23 @@ func runNuclei(urls []string, options utils.Options) ([]NucleiResult, error) {
 	}
 	defer os.Remove(tempInputFile)
 
-	nucleiCmd := fmt.Sprintf("nuclei -l %s -silent -jsonl", tempInputFile)
-	output, err := utils.RunCommandAndCapture(nucleiCmd, options)
+	// Base command arguments
+	args := []string{"-l", tempInputFile, "-silent", "-jsonl"}
+
+	// Adjust templates based on intensity
+	switch cfg.Scanning.Intensity {
+	case "deep":
+		utils.Log("Running deep scan with all templates.")
+		// Default behavior is all templates
+	case "light":
+		utils.Log("Running light scan with high and critical severity templates.")
+		args = append(args, "-severity", "high,critical")
+	default: // "normal"
+		utils.Log("Running normal scan with medium, high, and critical severity templates.")
+		args = append(args, "-severity", "medium,high,critical")
+	}
+
+	output, err := utils.RunCommandAndCapture(options, "nuclei", args...)
 	if err != nil {
 		return nil, err
 	}

@@ -58,8 +58,7 @@ func RunVisual(config *config.Config, db *sql.DB) {
 
 	utils.Banner("Running gowitness... this may take a while")
 	// gowitness command to use our temp file and output to our designated screenshot directory
-	gowitnessCmd := fmt.Sprintf("gowitness file -f %s -d %s --db-path %s", tempInputFile.Name(), screenshotDir, gowitnessDBPath)
-	utils.RunCommand(gowitnessCmd, options)
+	utils.RunCommand(options, "gowitness", "file", "-f", tempInputFile.Name(), "-d", screenshotDir, "--db-path", gowitnessDBPath)
 
 	utils.Banner("Updating database with screenshot paths")
 	// Now, read the gowitness database to get the paths

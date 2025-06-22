@@ -30,7 +30,30 @@ type Config struct {
 		Threads int `yaml:"threads"`
 	} `yaml:"recon"`
 
-	// Add other module configurations here, e.g., Fuzz, Scan, etc.
+	// Fuzzing module settings
+	Fuzzing struct {
+		Wordlist string `yaml:"wordlist,omitempty"`
+	} `yaml:"fuzzing,omitempty"`
+
+	// Scanning module settings
+	Scanning struct {
+		Intensity string `yaml:"intensity,omitempty"` // "light", "normal", "deep"
+	} `yaml:"scanning,omitempty"`
+
+	// Crawling module settings
+	Crawling struct {
+		MaxDepth int `yaml:"max_depth,omitempty"`
+	} `yaml:"crawling,omitempty"`
+
+	// Secrets module settings
+	Secrets struct {
+		TrufflehogConfig string `yaml:"trufflehog_config,omitempty"`
+	} `yaml:"secrets,omitempty"`
+
+	// Reporting module settings
+	Reporting struct {
+		Format string `yaml:"format,omitempty"` // "md", "json", "html"
+	} `yaml:"reporting,omitempty"`
 }
 
 // CreateDefaultConfig generates a default config.yaml file.
@@ -43,6 +66,31 @@ func CreateDefaultConfig() (*Config, error) {
 			Threads int `yaml:"threads"`
 		}{
 			Threads: 50,
+		},
+		Fuzzing: struct {
+			Wordlist string `yaml:"wordlist,omitempty"`
+		}{
+			Wordlist: "wordlists/default.txt", // Consider a common path
+		},
+		Scanning: struct {
+			Intensity string `yaml:"intensity,omitempty"` // "light", "normal", "deep"
+		}{
+			Intensity: "normal",
+		},
+		Crawling: struct {
+			MaxDepth int `yaml:"max_depth,omitempty"`
+		}{
+			MaxDepth: 2,
+		},
+		Secrets: struct {
+			TrufflehogConfig string `yaml:"trufflehog_config,omitempty"`
+		}{
+			TrufflehogConfig: "",
+		},
+		Reporting: struct {
+			Format string `yaml:"format,omitempty"` // "md", "json", "html"
+		}{
+			Format: "md",
 		},
 	}
 

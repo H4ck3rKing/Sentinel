@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"bug/modules/config"
@@ -68,8 +69,12 @@ func RunCrawl(config *config.Config, db *sql.DB) {
 	file.Close()
 
 	utils.Banner("Running katana against live URLs")
-	katanaCmd := fmt.Sprintf("katana -list %s -silent -json -o %s", katanaInputFile, katanaOutputFile)
-	utils.RunCommand(katanaCmd, options)
+	// Use crawl depth from config
+	crawlDepth := strconv.Itoa(config.Crawling.MaxDepth)
+	if crawlDepth == "0" {
+		crawlDepth = "2" // Default if not set
+	}
+	utils.RunCommand(options, "katana", "-list", katanaInputFile, "-silent", "-json", "-depth", crawlDepth, "-o", katanaOutputFile)
 
 	utils.Banner("Parsing katana output and adding new URLs to database")
 	targets, err := database.GetTargets(db)

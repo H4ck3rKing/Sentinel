@@ -17,6 +17,8 @@ echo "[+] Installing httpx..."
 go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
 echo "[+] Installing katana..."
 go install -v github.com/projectdiscovery/katana/cmd/katana@latest
+echo "[+] Installing gau..."
+go install -v github.com/lc/gau/v2/cmd/gau@latest
 
 # Other Go-based tools
 echo "[+] Installing ffuf..."
@@ -24,7 +26,7 @@ go install -v github.com/ffuf/ffuf@latest
 echo "[+] Installing gowitness..."
 go install -v github.com/sensepost/gowitness@latest
 echo "[+] Installing truffleHog..."
-go install github.com/trufflesecurity/trufflehog/v3/cmd/trufflehog@latest
+curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh | sh -s -- -b $(go env GOPATH)/bin
 
 
 # Python-based tools
@@ -47,4 +49,5 @@ fi
 echo
 echo "[*] Tool installation complete."
 echo "[*] Please ensure that your \$GOPATH/bin directory is in your system's PATH environment variable."
+echo "[*] You might need to add this to your shell profile (e.g., ~/.zshrc, ~/.bashrc)."
 echo "[*] You can add it by running: export PATH=\$PATH:\$(go env GOPATH)/bin" 
