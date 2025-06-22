@@ -19,6 +19,8 @@ rm -rf ${DEB_NAME}
 mkdir -p ${DEB_NAME}/DEBIAN
 mkdir -p ${DEB_NAME}/usr/local/bin
 mkdir -p ${DEB_NAME}/usr/share/sentinel
+mkdir -p ${DEB_NAME}/usr/share/applications
+mkdir -p ${DEB_NAME}/usr/share/pixmaps
 
 # --- Copying files ---
 echo "[*] Copying files to the package structure..."
@@ -36,6 +38,15 @@ cp sentinel ${DEB_NAME}/usr/local/bin/sentinel
 # Copy the dependency installation script
 # This will be used by the postinst script
 cp install_tools.sh ${DEB_NAME}/usr/share/sentinel/install_tools.sh
+
+# --- Desktop Integration ---
+echo "[*] Adding desktop application entry..."
+
+# Copy the .desktop file
+cp debian/sentinel.desktop ${DEB_NAME}/usr/share/applications/sentinel.desktop
+
+# Copy the icon
+cp assets/logo.png ${DEB_NAME}/usr/share/pixmaps/sentinel.png
 
 # --- Building the Debian package ---
 echo "[*] Building the Debian package..."

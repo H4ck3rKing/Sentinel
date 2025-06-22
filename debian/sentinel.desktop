@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Name=Sentinel
+Comment=Advanced Bug Bounty Automation Framework
+Exec=gnome-terminal -e "sentinel"
+Icon=/usr/share/pixmaps/sentinel.png
+Terminal=false
+Type=Application
+Categories=Development;Security; 
