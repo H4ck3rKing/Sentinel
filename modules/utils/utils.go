@@ -1,41 +1,65 @@
 package utils
 
 import (
-	"bufio"
 	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
+
+	"github.com/fatih/color"
 )
 
-// RunCommand executes an external command and streams its output to stdout/stderr.
-func RunCommand(commandName string, args ...string) error {
-	Log(fmt.Sprintf("Running: %s %s", commandName, strings.Join(args, " ")))
-	cmd := exec.Command(commandName, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	err := cmd.Run()
-	if err != nil {
-		Error("Command finished with error", err)
-	} else {
-		Success(fmt.Sprintf("Successfully executed: %s", commandName))
-	}
-	return err
+// Options holds common options for module execution.
+type Options struct {
+	Output  string
+	Threads int
 }
 
-// RunCommandAndCapture executes a command and captures its standard output.
-func RunCommandAndCapture(commandName string, args ...string) (string, error) {
-	Log(fmt.Sprintf("Capturing output from: %s %s", commandName, strings.Join(args, " ")))
-	cmd := exec.Command(commandName, args...)
+// CommandExists checks if a command exists in the system's PATH.
+func CommandExists(cmd string) bool {
+	_, err := exec.LookPath(cmd)
+	return err == nil
+}
+
+// Banner prints a styled banner for module sections.
+func Banner(text string) {
+	color.New(color.FgCyan, color.Bold).Printf("\n--- %s ---\n\n", text)
+}
+
+// RunCommand executes an external command and prints its output.
+// It is a simplified version for better UI control.
+func RunCommand(command string, options Options) error {
+	fmt.Println(color.GreenString("▶ Running: %s", command))
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	// The new modules often need to be run from the workspace directory
+	// to handle relative paths for output correctly.
+	cmd.Dir = options.Output
+	return cmd.Run()
+}
+
+// RunCommandAndCapture executes a command and returns its output.
+func RunCommandAndCapture(command string, options Options) (string, error) {
+	fmt.Println(color.GreenString("▶ Capturing: %s", command))
+	parts := strings.Fields(command)
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Dir = options.Output
+
 	var out bytes.Buffer
 	cmd.Stdout = &out
-	// Stderr is ignored for now, but could be captured as well
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+
 	err := cmd.Run()
 	if err != nil {
-		Error("Command finished with error", err)
-		return "", err
+		// Return the error along with stderr for better debugging
+		return "", fmt.Errorf("command failed: %v\nstderr: %s", err, stderr.String())
 	}
-	Success(fmt.Sprintf("Successfully captured output from: %s", commandName))
 	return out.String(), nil
-} 
+}
+
+// RunCommandAndCaptureWithInput is not used by the new modules, so it can be removed
+// for now to simplify the utils package. If needed later, it can be re-added. 
