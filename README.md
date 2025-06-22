@@ -1,14 +1,14 @@
 <div align="center">
-
+  <img src="https://raw.githubusercontent.com/H4ck3rKing/Sentinel/main/assets/logo.png" alt="Sentinel Logo" width="150"/>
   <h1 align="center">Sentinel Framework</h1>
+  <p align-center">
+    <i>An advanced, all-in-one bug bounty automation framework designed for the modern security researcher.</i>
+  </p>
   <p align="center">
     <img src="https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white" alt="Go" />
     <img src="https://img.shields.io/badge/sqlite-%23003B57.svg?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
     <img src="https://img.shields.io/github/license/H4ck3rKing/Sentinel?style=for-the-badge" alt="License" />
     <img src="https://img.shields.io/github/stars/H4ck3rKing/Sentinel?style=for-the-badge&color=yellow" alt="Stars" />
-  </p>
-  <p align="center">
-    An advanced, all-in-one bug bounty automation framework designed for the modern security researcher.
   </p>
 </div>
 
@@ -26,9 +26,10 @@
 
 ## 📖 Table of Contents
 - [✨ Features](#-features)
+- [▶️ Quick Start](#️-quick-start)
 - [🛠️ Installation](#️-installation)
 - [⚙️ Configuration](#️-configuration)
-- [🕹️ Usage](#️-usage)
+- [��️ Usage](#️-usage)
   - [Core Commands](#core-commands)
   - [Available Modules](#available-modules)
   - [Example Workflow](#example-workflow)
@@ -50,40 +51,81 @@ Sentinel provides a powerful, modular, and interactive environment to streamline
 
 ---
 
+## ▶️ Quick Start
+
+Want to get scanning immediately? Here's how:
+
+1.  **Install the `.deb` package**:
+    ```sh
+    # Download the latest .deb file from the Releases page
+    sudo dpkg -i ./sentinel_*.deb
+    ```
+2.  **Run Sentinel**:
+    ```sh
+    sentinel
+    ```
+3.  **Add a target and start scanning**:
+    ```
+    [sentinel|default]> add target example.com
+    [sentinel|default]> run all
+    ```
+---
+
 ## 🛠️ Installation
+
+### From `.deb` Package (Recommended)
+
+This is the easiest and recommended way to install Sentinel on Debian-based systems (like Ubuntu, Kali, etc.).
+
+1.  **Download the latest release**: Go to the [**Releases**](https://github.com/H4ck3rKing/Sentinel/releases) page on GitHub and download the most recent `sentinel_*.deb` file.
+
+2.  **Install the package**: Open your terminal, navigate to the directory where you downloaded the file, and run the following command:
+    ```sh
+    sudo dpkg -i sentinel_*.deb
+    ```
+    The installer will automatically:
+    - Place the `sentinel` binary in `/usr/local/bin`, making it accessible from anywhere.
+    - Install system dependencies like `golang-go` and `pipx`.
+    - Run the `install_tools.sh` script to install all third-party Go and Python tools for the user who ran the command.
+
+3.  **Run Sentinel**: That's it! You can now run the toolkit from any terminal window.
+    ```sh
+    sentinel
+    ```
+
+<details>
+<summary>Building from Source (Advanced)</summary>
+
+If you prefer to build the project from source, follow these steps.
 
 > **Requirements:**
 > * Linux (tested on Debian-based distros)
 > * [Go](https://golang.org/doc/install) (version 1.18 or higher)
 > * A shell environment like `bash` or `zsh`.
 
-### 1. Clone the Repository
-First, clone the Sentinel repository from GitHub.
+1.  **Clone the Repository**
+    ```sh
+    git clone https://github.com/H4ck3rKing/Sentinel.git
+    cd Sentinel
+    ```
 
-```sh
-git clone https://github.com/H4ck3rKing/Sentinel.git
-cd Sentinel
-```
+2.  **Install Dependencies**
+    The included script will install all required third-party tools.
+    ```sh
+    chmod +x install_tools.sh
+    ./install_tools.sh
+    ```
+    **Important**: After running the script, you must ensure your Go bin directory is in your system's `PATH`. Add the following line to your shell's configuration file (e.g., `~/.zshrc`, `~/.bashrc`) and restart your terminal.
+    ```sh
+    export PATH=$PATH:$(go env GOPATH)/bin
+    ```
 
-### 2. Install Dependencies
-Sentinel leverages a suite of powerful third-party tools. The included `install_tools.sh` script will download and install all of them for you.
-
-```sh
-chmod +x install_tools.sh
-./install_tools.sh
-```
-**Important**: After running the script, you must ensure your Go bin directory is in your system's `PATH`. Add the following line to your shell's configuration file (e.g., `~/.zshrc`, `~/.bashrc`) and restart your terminal.
-
-```sh
-export PATH=$PATH:$(go env GOPATH)/bin
-```
-
-### 3. Build Sentinel
-Compile the application using the `go build` command. This will create a `sentinel` executable in the current directory.
-
-```sh
-go build -o sentinel .
-```
+3.  **Build Sentinel**
+    Compile the application using the `go build` command.
+    ```sh
+    go build -o sentinel .
+    ```
+</details>
 
 ---
 
